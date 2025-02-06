@@ -31,19 +31,25 @@ class Api:
         """
         Create task
         """
-        return f"{self.base}/api/tasks/~/{profile}/{task}"
+        if "/" not in profile:
+            profile = "~/{profile}"
+        return f"{self.base}/api/tasks/{profile}/{task}"
 
     def task_signed_url(self, profile, task):
         """
         Get a signed URL for a task
         """
-        return f"{self.base}/api/tasks/~/{profile}/{task}/signed"
+        if "/" not in profile:
+            profile = "~/{profile}"
+        return f"{self.base}/api/tasks/{profile}/{task}/signed"
 
     def task_runs(self, profile, task):
         """
         Get a list of runs
         """
-        return f"{self.base}/api/runs/~/{profile}/{task}"
+        if "/" not in profile:
+            profile = "~/{profile}"
+        return f"{self.base}/api/runs/{profile}/{task}"
 
     def profiles(self, user: str = "~"):
         """
@@ -56,6 +62,14 @@ class Api:
         List public profiles
         """
         return f"{self.base}/api/profiles"
+
+    def delete_profile(self, profile):
+        """
+        Delete profile
+        """
+        if "/" not in profile:
+            profile = "~/{profile}"
+        return f"{self.base}/api/profiles/{profile}"
 
     def search(self, query):
         """

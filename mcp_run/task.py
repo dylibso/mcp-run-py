@@ -1,10 +1,9 @@
 from __future__ import annotations
 from dataclasses import dataclass
-from typing import List
+from typing import List, TYPE_CHECKING
 from datetime import datetime, timedelta
 from enum import StrEnum
 from time import sleep
-from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from .client import Client

@@ -12,6 +12,7 @@ import extism as ext
 
 from .api import Api
 from .types import Servlet, CallResult, Content, Tool
+from .profile import Profile
 from .task import TaskRunner, Task, TaskRun
 
 
@@ -229,10 +230,12 @@ class Client:
         """
         return logging.basicConfig(*args, **kw)
 
-    def set_profile(self, profile: str):
+    def set_profile(self, profile: str | Profile):
         """
         Select a profile
         """
+        if isinstance(profile, Profile):
+            profile = profile.slug
         self.config.profile = profile
         self.last_installations_request = None
 
@@ -279,6 +282,40 @@ class Client:
             created_at=datetime.fromisoformat(data["created_at"]),
             modified_at=datetime.fromisoformat(data["modified_at"]),
         )
+
+    def list_user_profiles(self) -> Iterator[Profile]:
+        url = self.api.profiles()
+        self.logger.info(f"Listing mcp.run profiles from {url}")
+        res = requests.get(url, cookies={"sessionId": self.session_id})
+        res.raise_for_status()
+        data = res.json()
+        for p in data:
+            profile = Profile(
+                _client=self,
+                slug=p["slug"],
+                description=p["description"],
+                is_public=p["is_public"],
+                created_at=datetime.fromisoformat(p["created_at"]),
+                modified_at=datetime.fromisoformat(p["modified_at"]),
+            )
+            yield profile
+
+    def list_public_profiles(self) -> Iterator[Profile]:
+        url = self.api.public_profiles()
+        self.logger.info(f"Listing mcp.run public profiles from {url}")
+        res = requests.get(url, cookies={"sessionId": self.session_id})
+        res.raise_for_status()
+        data = res.json()
+        for p in data:
+            profile = Profile(
+                _client=self,
+                slug=p["slug"],
+                description=p["description"],
+                is_public=p["is_public"],
+                created_at=datetime.fromisoformat(p["created_at"]),
+                modified_at=datetime.fromisoformat(p["modified_at"]),
+            )
+            yield profile
 
     def list_tasks(self) -> Iterator[Task]:
         """
@@ -335,19 +372,37 @@ class Client:
     @property
     def tasks(self) -> Dict[str, Task]:
         """
-        Get a dict containing all tasks associated with their name
+        Get all tasks keyed by task name
         """
         t = {}
         for task in self.list_tasks():
             t[task.name] = t
         return t
 
-    def list_installs(self) -> Iterator[Servlet]:
+    @property
+    def profiles(self) -> Dict[str, Dict[str, Profile]]:
+        """
+        Get all profiles, including public profiles, keyed by user and profile name
+        """
+        p = {}
+        for profile in self.list_user_profiles():
+            if profile.username not in p:
+                p[profile.username] = {}
+            p[profile.username][profile.name] = profile
+        for profile in self.list_public_profiles():
+            if profile.username not in p:
+                p[profile.username] = {}
+            p[profile.username][profile.name] = profile
+        return p
+
+    def list_installs(self, profile=None) -> Iterator[Servlet]:
         """
         List all installed servlets, this will make an HTTP
         request each time
         """
-        url = self.api.installations(self.config.profile)
+        if profile is None:
+            profile = self.config.profile
+        url = self.api.installations(profile)
         self.logger.info(f"Listing installed mcp.run servlets from {url}")
         headers = {}
         if self.last_installations_request is not None:
@@ -537,3 +592,18 @@ class Client:
             tool = found_tool
         plugin = self.plugin(tool.servlet, wasi=wasi, functions=functions, wasm=wasm)
         return plugin.call(tool=tool.name, input=input)
+
+    def delete_profile(self, profile: str | Profile):
+        """
+        Delete a profile
+        """
+        if isinstance(profile, Profile):
+            profile = profile.slug
+        url = self._client.api.delete_profile(profile)
+        res = requests.delete(
+            url,
+            cookies={
+                "sessionId": self.session_id,
+            },
+        )
+        res.raise_for_status()

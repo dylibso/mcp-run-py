@@ -6,9 +6,10 @@ client = Client()  # Create the client, this will check the
 # the `MCP_RUN_SESSION_ID` env var can be used
 # to specify a valid mcp.run session id
 
-# Call a tool with the given input
-results = client.call("eval-js", {"code": "'Hello, world!'"})
+# Get dylibso/featured profile
+featured = client.profiles["dylibso"]["featured"]
 
-# Iterate over the results
-for content in results.content:
-    print(content.text)
+# List installs
+for install in featured.list_installs():
+    print(install)
+
