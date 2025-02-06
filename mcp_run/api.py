@@ -1,5 +1,6 @@
 from dataclasses import dataclass
 
+
 @dataclass
 class Api:
     """
@@ -61,5 +62,3 @@ class Api:
         Get the data associated with a content address
         """
         return f"{self.base}/api/c/{addr}"
-
-

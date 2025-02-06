@@ -26,6 +26,7 @@ __all__ = [
     "TaskRunner",
 ]
 
+
 @dataclass
 class Tool:
     """
@@ -412,7 +413,9 @@ def _default_session_id() -> str:
 
 
 def _default_update_interval():
-    ms = os.environ.get("MCP_RUN_UPDATE_INTERVAL", os.environ.get("MCPX_UPDATE_INTERVAL"))
+    ms = os.environ.get(
+        "MCP_RUN_UPDATE_INTERVAL", os.environ.get("MCPX_UPDATE_INTERVAL")
+    )
     if ms is None:
         return timedelta(minutes=1)
     else:
