@@ -13,69 +13,18 @@ import urllib
 import requests
 import extism as ext
 
+from .api import Api
 
-@dataclass
-class Endpoints:
-    """
-    Manages mcp.run endpoints
-    """
-
-    base: str
-    """
-    mcp.run base URL
-    """
-
-    def installations(self, profile):
-        """
-        List installations
-        """
-        if "/" in profile:
-            return f"{self.base}/api/profiles/{profile}/installations"
-        return f"{self.base}/api/profiles/~/{profile}/installations"
-
-    def tasks(self):
-        """
-        List tasks
-        """
-        return f"{self.base}/api/users/~/tasks"
-
-    def create_task(self, profile, task):
-        """
-        Create task
-        """
-        return f"{self.base}/api/tasks/~/{profile}/{task}"
-
-    def task_signed_url(self, profile, task):
-        """
-        Get a signed URL for a task
-        """
-        return f"{self.base}/api/tasks/~/{profile}/{task}/signed"
-
-    def task_runs(self, profile, task):
-        """
-        Get a list of runs
-        """
-        return f"{self.base}/api/runs/~/{profile}/{task}"
-
-    def profiles(self, user: str = "~"):
-        """
-        List profiles
-        """
-        return f"{self.base}/api/profiles/{user}"
-
-    def search(self, query):
-        """
-        Search servlets
-        """
-        query = urllib.parse.quote_plus(query)
-        return f"{self.base}/api/servlets?q={query}"
-
-    def content(self, addr: str):
-        """
-        Get the data associated with a content address
-        """
-        return f"{self.base}/api/c/{addr}"
-
+__all__ = [
+    "Tool",
+    "Client",
+    "ClientConfig",
+    "Profile",
+    "Task",
+    "TaskRun",
+    "Servlet",
+    "TaskRunner",
+]
 
 @dataclass
 class Tool:
@@ -107,7 +56,7 @@ class Tool:
 @dataclass
 class Servlet:
     """
-    An mcpx servlet
+    An mcp.run servlet
     """
 
     name: str
@@ -278,7 +227,7 @@ class Task:
         """
         Get a signed URL for a task
         """
-        url = self._client.endpoints.task_signed_url(self.profile, self.name)
+        url = self._client.api.task_signed_url(self.profile, self.name)
         self._client.logger.info(f"Creating signed url for {self.slug}")
         res = requests.post(url, cookies={"sessionId": self._client.session_id})
         res.raise_for_status()
@@ -439,7 +388,7 @@ def _parse_mcpx_config(filename: str | Path) -> str | None:
 
 
 def _default_session_id() -> str:
-    # Allow session id to be specified using MCPX_SESSION_ID
+    # Allow session id to be specified using MCP_RUN_SESSION_ID
     id = os.environ.get("MCP_RUN_SESSION_ID", os.environ.get("MCPX_SESSION_ID"))
     if id is not None:
         return id
@@ -463,7 +412,7 @@ def _default_session_id() -> str:
 
 
 def _default_update_interval():
-    ms = os.environ.get("MCPX_UPDATE_INTERVAL")
+    ms = os.environ.get("MCP_RUN_UPDATE_INTERVAL", os.environ.get("MCPX_UPDATE_INTERVAL"))
     if ms is None:
         return timedelta(minutes=1)
     else:
@@ -561,9 +510,9 @@ class Client:
     Python logger
     """
 
-    endpoints: Endpoints
+    api: Api
     """
-    mcp.run endpoint manager
+    mcp.run api endpoints
     """
 
     install_cache: Cache[str, Servlet]
@@ -592,7 +541,7 @@ class Client:
         if config is None:
             config = ClientConfig()
         self.session_id = session_id
-        self.endpoints = Endpoints(config.base_url)
+        self.api = Api(config.base_url)
         self.install_cache = Cache(config.tool_refresh_time)
         self.plugin_cache = Cache()
         self.logger = config.logger
@@ -627,7 +576,7 @@ class Client:
             api_key = os.environ.get("OPENAI_API_KEY")
         elif api_key is None and runner.lower() == "anthropic":
             api_key = os.environ.get("ANTHROPIC_API_KEY")
-        url = self.endpoints.create_task(self.config.profile, task_name)
+        url = self.api.create_task(self.config.profile, task_name)
         self.logger.info(f"Creating mcp.run task {url}")
         settings = settings or {}
         if "key" not in settings and api_key is not None:
@@ -659,7 +608,7 @@ class Client:
         """
         List all tasks associated with the configured profile
         """
-        url = self.endpoints.tasks()
+        url = self.api.tasks()
         self.logger.info(f"Listing mcp.run tasks from {url}")
         res = requests.get(url, cookies={"sessionId": self.session_id})
         res.raise_for_status()
@@ -686,7 +635,7 @@ class Client:
         """
         if isinstance(task, Task):
             task = task.name
-        url = self.endpoints.task_runs(self.config.profile, task)
+        url = self.api.task_runs(self.config.profile, task)
         self.logger.info(f"Listing mcp.run task runs from {url}")
         res = requests.get(url, cookies={"sessionId": self.session_id})
         res.raise_for_status()
@@ -719,7 +668,7 @@ class Client:
         List all installed servlets, this will make an HTTP
         request each time
         """
-        url = self.endpoints.installations(self.config.profile)
+        url = self.api.installations(self.config.profile)
         self.logger.info(f"Listing installed mcp.run servlets from {url}")
         headers = {}
         if self.last_installations_request is not None:
@@ -809,7 +758,7 @@ class Client:
         return None
 
     def search(self, query: str) -> List[dict]:
-        url = self.endpoints.search(query)
+        url = self.api.search(query)
         res = requests.get(
             url,
             cookies={
@@ -854,7 +803,7 @@ class Client:
                 f"Fetching servlet Wasm for {install.name}: {install.content_addr}"
             )
             res = requests.get(
-                self.endpoints.content(install.content_addr),
+                self.api.content(install.content_addr),
                 cookies={
                     "sessionId": self.session_id,
                 },
