@@ -1,7 +1,7 @@
 [project]
 name = "mcp-run"
 version = "0.1.0"
-description = "Add your description here"
+description = "A Python client for mcp.run"
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
@@ -15,3 +15,8 @@ dev = [
     "python-lsp-server>=1.12.0",
     "ruff>=0.9.4",
 ]
+
+# Workaround for uv/setuptools version mismatch
+# https://github.com/astral-sh/uv/issues/9513#issuecomment-2519527822
+[tool.setuptools]
+license-files = []

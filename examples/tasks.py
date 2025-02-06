@@ -20,4 +20,3 @@ task = client.tasks["my-task"]
 # Run it again
 task_run = my_task.run({"name": "Bob"})
 print(task_run.results())
-
