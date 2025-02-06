@@ -7,6 +7,8 @@ __all__ = [
     "Tool",
     "Client",
     "ClientConfig",
+    "CallResult",
+    "InstalledPlugin",
     "Profile",
     "Task",
     "TaskRun",

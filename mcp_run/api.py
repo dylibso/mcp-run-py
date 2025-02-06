@@ -47,9 +47,15 @@ class Api:
 
     def profiles(self, user: str = "~"):
         """
-        List profiles
+        List profiles for a user
         """
         return f"{self.base}/api/profiles/{user}"
+
+    def public_profiles(self):
+        """
+        List public profiles
+        """
+        return f"{self.base}/api/profiles"
 
     def search(self, query):
         """
