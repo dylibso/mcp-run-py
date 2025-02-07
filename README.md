@@ -74,4 +74,4 @@ for content in results.content:
     print(content.text)
 ```
 
-More examples can be found in the [examples/](https://github.com/dylibso/mcp-run/tree/main/examples) directory
+More examples can be found in the [examples/](https://github.com/dylibso/mcp-run-py/tree/main/examples) directory
