@@ -36,4 +36,4 @@ class Profile:
         self._client.delete_profile(self)
 
     def list_installs(self):
-        return self._client.list_installs(self.slug)
+        return self._client.list_installs(profile=self.slug)
