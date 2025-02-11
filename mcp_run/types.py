@@ -16,6 +16,8 @@ class ProfileSlug(str):
     """
 
     def __new__(cls, user, name):
+        if user == '':
+            user = '~'
         return str.__new__(cls, f"{user}/{name}")
 
     @property
@@ -28,10 +30,9 @@ class ProfileSlug(str):
 
     @staticmethod
     def parse(s):
-        t = s.split("/")
-        if len(t) == 1:
+        if "/" not in s:
             return ProfileSlug("~", s)
-        return ProfileSlug(t[0], t[1])
+        return ProfileSlug(*s.split("/"))
 
     @staticmethod
     def current_user(profile_name):
