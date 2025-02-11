@@ -11,4 +11,4 @@ results = client.search("fetch")  # Search for servlets that mention the
 
 # Iterate through results and print the slug
 for result in results:
-    print(result["slug"])
+    print(result.slug)
