@@ -240,7 +240,7 @@ class Client:
         Select a profile
         """
         if isinstance(profile, Profile):
-            profile = profile.slug
+            self.profile = profile.slug
         if profile != self.config.profile:
             self.config.profile = profile
             self.clear_cache()
@@ -290,7 +290,11 @@ class Client:
         )
 
     def create_profile(
-        self, name: str, description: str = "", is_public: bool = False
+        self,
+        name: str,
+        description: str = "",
+        is_public: bool = False,
+        set_current: bool = False,
     ) -> Profile:
         """
         Create a new profile
@@ -301,7 +305,7 @@ class Client:
         res = requests.post(url, cookies={"sessionId": self.session_id}, json=params)
         res.raise_for_status()
         data = res.json()
-        return Profile(
+        p = Profile(
             _client=self,
             slug=data["slug"],
             description=data["description"],
@@ -309,6 +313,9 @@ class Client:
             created_at=datetime.fromisoformat(data["created_at"]),
             modified_at=datetime.fromisoformat(data["modified_at"]),
         )
+        if set_current:
+            self.set_profile(name)
+        return p
 
     def list_user_profiles(self) -> Iterator[Profile]:
         """

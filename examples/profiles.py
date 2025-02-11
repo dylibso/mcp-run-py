@@ -14,10 +14,9 @@ for install in featured.list_installs():
     print(install)
 
 # Create a new profile
-profile = client.create_profile("python-test-profile", description="this is a test")
-
-# Update the current profile to the newly created `python-test-profile`
-client.set_profile("python-test-profile")
+profile = client.create_profile(
+    "python-test-profile", description="this is a test", set_current=True
+)
 
 # Search for servlets
 r = list(client.search("evaluate javascript"))

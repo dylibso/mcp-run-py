@@ -1,6 +1,6 @@
 from __future__ import annotations
 from dataclasses import dataclass
-from typing import List, TYPE_CHECKING
+from typing import List, TYPE_CHECKING, Iterator
 from datetime import datetime, timedelta
 from enum import StrEnum
 from time import sleep
@@ -132,6 +132,13 @@ class Task:
         res.raise_for_status()
         data = res.json()
         return data["url"]
+
+    def list_runs(self) -> Iterator[TaskRun]:
+        """
+        Iterate over all task runs
+        """
+        for t in self._client.list_task_runs(self):
+            yield t
 
     def run(
         self,

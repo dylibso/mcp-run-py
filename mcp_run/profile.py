@@ -37,3 +37,11 @@ class Profile:
 
     def list_installs(self):
         return self._client.list_installs(profile=self.slug)
+
+    def install(self, *args, **kw):
+        kw["profile"] = self
+        return self._client.install(*args, **kw)
+
+    def uninstall(self):
+        kw["profile"] = self
+        return self._client.uninstall(*args, **kw)
