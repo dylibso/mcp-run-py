@@ -8,7 +8,7 @@ client = Client()  # Create the client, this will check the
 
 # Create a new task
 my_task = client.create_task(
-    "my-task", runner="openai", model="gpt-4o", prompt="write a greeting for {{ name }}"
+    "my-task", runner="anthropic", model="claude-3-5-sonnet-latest", prompt="write a greeting for {{ name }}"
 )
 
 # Run it

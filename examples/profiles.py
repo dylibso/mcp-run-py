@@ -10,7 +10,7 @@ client = Client()  # Create the client, this will check the
 featured = client.profiles["dylibso"]["featured"]
 
 # List installs
-print("Featured servlets:") 
+print("Featured servlets:")
 for install in featured.list_installs():
     print(f"  {install.slug}")
 
@@ -36,5 +36,5 @@ for install in p.list_installs():
     client.uninstall(install)
 
 # Delete the profile
-print(f"Deleting python-test-profile")
+print("Deleting python-test-profile")
 client.delete_profile(profile)

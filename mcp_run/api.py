@@ -1,10 +1,10 @@
 from dataclasses import dataclass
 import urllib
 
-from .types import Slug, InvalidUserError
+from .types import ProfileSlug, InvalidUserError
 
 
-def fix_profile(p: Slug, only_self=False):
+def fix_profile(p: ProfileSlug, only_self=False):
     if only_self:
         if p.user != "~":
             raise InvalidUserError(p.user)
@@ -25,21 +25,21 @@ class Api:
     def current_user(self):
         return f"{self.base}/api/users/~"
 
-    def installations(self, profile: Slug):
+    def installations(self, profile: ProfileSlug):
         """
         List installations
         """
         profile = fix_profile(profile)
         return f"{self.base}/api/profiles/{profile}/installations"
 
-    def install(self, profile: Slug):
+    def install(self, profile: ProfileSlug):
         """
         Install a servlet to a profile
         """
         profile = fix_profile(profile, only_self=True)
         return f"{self.base}/api/profiles/{profile}/installations"
 
-    def uninstall(self, profile: Slug, installation: str):
+    def uninstall(self, profile: ProfileSlug, installation: str):
         """
         Uninstall a servlet from a profile
         """
@@ -52,21 +52,21 @@ class Api:
         """
         return f"{self.base}/api/users/~/tasks"
 
-    def create_task(self, profile: Slug, task: str):
+    def create_task(self, profile: ProfileSlug, task: str):
         """
         Create task
         """
         profile = fix_profile(profile, only_self=True)
         return f"{self.base}/api/tasks/{profile}/{task}"
 
-    def task_signed_url(self, profile: Slug, task: str):
+    def task_signed_url(self, profile: ProfileSlug, task: str):
         """
         Get a signed URL for a task
         """
         profile = fix_profile(profile, only_self=True)
         return f"{self.base}/api/tasks/{profile}/{task}/signed"
 
-    def task_runs(self, profile: Slug, task: str):
+    def task_runs(self, profile: ProfileSlug, task: str):
         """
         Get a list of runs
         """
@@ -85,7 +85,7 @@ class Api:
         """
         return f"{self.base}/api/profiles"
 
-    def delete_profile(self, profile: Slug):
+    def delete_profile(self, profile: ProfileSlug):
         """
         Delete profile
         """

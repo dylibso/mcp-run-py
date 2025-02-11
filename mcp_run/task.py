@@ -5,7 +5,7 @@ from datetime import datetime, timedelta
 from enum import StrEnum
 from time import sleep
 
-from .types import Slug
+from .types import ProfileSlug
 
 if TYPE_CHECKING:
     from .client import Client
@@ -94,11 +94,6 @@ class Task:
     Full task identifier
     """
 
-    profile: Slug
-    """
-    Task profile
-    """
-
     runner: TaskRunner
     """
     LLM provider for the task
@@ -121,6 +116,12 @@ class Task:
 
     created_at: datetime
     modified_at: datetime
+
+    @property
+    def profile(self) -> ProfileSlug:
+        return ProfileSlug.parse("/".join(self.task_slug.split("/")[:2]))._current_user(
+            self._client.user.username
+        )
 
     def signed_url(self) -> str:
         """

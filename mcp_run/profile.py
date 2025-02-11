@@ -3,7 +3,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from typing import TYPE_CHECKING
 
-from .types import Slug
+from .types import ProfileSlug
 
 if TYPE_CHECKING:
     from .client import Client
@@ -16,7 +16,7 @@ class Profile:
     """
 
     _client: Client
-    slug: Slug
+    slug: ProfileSlug
     description: str
     is_public: bool
     created_at: datetime

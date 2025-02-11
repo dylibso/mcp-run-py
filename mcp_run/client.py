@@ -11,7 +11,7 @@ import requests
 import extism as ext
 
 from .api import Api
-from .types import Servlet, ServletSearchResult, CallResult, Content, Tool, Slug
+from .types import Servlet, ServletSearchResult, CallResult, Content, Tool, ProfileSlug
 from .profile import Profile
 from .task import TaskRunner, Task, TaskRun
 
@@ -114,7 +114,7 @@ class ClientConfig:
     Python logger
     """
 
-    profile: Slug = field(default_factory=lambda: Slug("~", "default"))
+    profile: ProfileSlug = field(default_factory=lambda: ProfileSlug("~", "default"))
     """
     mcp.run profile name
     """
@@ -125,14 +125,14 @@ class ClientConfig:
         """
         return logging.basicConfig(*args, **kw)
 
-    def with_profile(self, profile: str | Slug):
+    def with_profile(self, profile: str | ProfileSlug):
         """
         Update the configured profile
         """
-        if isinstance(profile, Slug):
+        if isinstance(profile, ProfileSlug):
             self.profile = profile
         else:
-            self.profile = Slug.parse(profile)
+            self.profile = ProfileSlug.parse(profile)
         return self
 
 
@@ -250,15 +250,19 @@ class Client:
         if log_level is not None:
             self.configure_logging(level=log_level)
 
-    def _fix_profile(self, profile: str | Slug | Profile | None, user=False) -> Slug:
+    def _fix_profile(
+        self, profile: str | ProfileSlug | Profile | None, user=False
+    ) -> ProfileSlug:
         if user:
-            return self._fix_profile(profile, user=False)._current_user(self.user.username)
+            return self._fix_profile(profile, user=False)._current_user(
+                self.user.username
+            )
         if profile is None:
             return self.config.profile
         elif isinstance(profile, Profile):
             return profile.slug
         elif isinstance(profile, str):
-            return Slug.parse(profile)
+            return ProfileSlug.parse(profile)
         return profile
 
     def configure_logging(self, *args, **kw):
@@ -294,7 +298,7 @@ class Client:
         )
         return self._user
 
-    def set_profile(self, profile: str | Slug | Profile):
+    def set_profile(self, profile: str | ProfileSlug | Profile):
         """
         Select a profile
         """
@@ -312,7 +316,7 @@ class Client:
         prompt: str,
         api_key: str | None = None,
         settings: dict | None = None,
-        profile: Profile | Slug | str | None = None,
+        profile: Profile | ProfileSlug | str | None = None,
     ) -> Task:
         """
         Create a new task
@@ -341,9 +345,6 @@ class Client:
         return Task(
             _client=self,
             name=data["name"],
-            profile=Slug.parse("/".join(data["slug"].split("/")[:2]))._current_user(
-                self.user.username
-            ),
             task_slug=data["slug"],
             runner=data["runner"],
             settings=data["settings"],
@@ -364,14 +365,14 @@ class Client:
         Create a new profile
         """
         params = {"description": description, "is_public": is_public}
-        url = self.api.create_profile(profile=Slug("~", name))
+        url = self.api.create_profile(profile=ProfileSlug("~", name))
         self.logger.info(f"Creating profile {name} {url}")
         res = requests.post(url, cookies={"sessionId": self.session_id}, json=params)
         res.raise_for_status()
         data = res.json()
         p = Profile(
             _client=self,
-            slug=Slug("~", name),
+            slug=ProfileSlug("~", name),
             description=data["description"],
             is_public=data["is_public"],
             created_at=datetime.fromisoformat(data["created_at"]),
@@ -393,7 +394,7 @@ class Client:
         for p in data:
             profile = Profile(
                 _client=self,
-                slug=Slug.parse(p["slug"]),
+                slug=ProfileSlug.parse(p["slug"]),
                 description=p["description"],
                 is_public=p["is_public"],
                 created_at=datetime.fromisoformat(p["created_at"]),
@@ -413,7 +414,7 @@ class Client:
         for p in data:
             profile = Profile(
                 _client=self,
-                slug=Slug.parse(p["slug"]),
+                slug=ProfileSlug.parse(p["slug"]),
                 description=p["description"],
                 is_public=p["is_public"],
                 created_at=datetime.fromisoformat(p["created_at"]),
@@ -430,7 +431,9 @@ class Client:
         for profile in self.list_public_profiles():
             yield profile
 
-    def list_tasks(self, profile: Profile | Slug | str | None = None) -> Iterator[Task]:
+    def list_tasks(
+        self, profile: Profile | ProfileSlug | str | None = None
+    ) -> Iterator[Task]:
         """
         List all tasks associated with the configured profile
         """
@@ -445,9 +448,6 @@ class Client:
                 _client=self,
                 name=t["name"],
                 task_slug=t["slug"],
-                profile=Slug.parse("/".join(t["slug"].split("/")[:2]))._current_user(
-                    self.user.username
-                ),
                 runner=t["runner"],
                 settings=t.get("settings", {}),
                 prompt=t[t["runner"]]["prompt"],
@@ -460,7 +460,7 @@ class Client:
             yield task
 
     def list_task_runs(
-        self, task: Task | str, profile: Profile | Slug | str | None = None
+        self, task: Task | str, profile: Profile | ProfileSlug | str | None = None
     ) -> Iterator[TaskRun]:
         """
         List all tasks runs associated with the configured profile
@@ -478,9 +478,6 @@ class Client:
                 _client=self,
                 name=t["name"],
                 task_slug=t["slug"],
-                profile=Slug.parse("/".join(t["slug"].split("/")[:2]))._current_user(
-                    self.user.username
-                ),
                 runner=t["runner"],
                 settings=t.get("settings", {}),
                 prompt=t[t["runner"]]["prompt"],
@@ -499,7 +496,7 @@ class Client:
         """
         t = {}
         for task in self.list_tasks():
-            t[task.name] = t
+            t[task.name] = task
         return t
 
     @property
@@ -520,7 +517,7 @@ class Client:
         return p
 
     def list_installs(
-        self, profile: str | Profile | Slug | None = None
+        self, profile: str | Profile | ProfileSlug | None = None
     ) -> Iterator[Servlet]:
         """
         List all installed servlets, this will make an HTTP
@@ -531,7 +528,7 @@ class Client:
         self.logger.info(f"Listing installed mcp.run servlets from {url}")
         headers = {}
         if self.last_installations_request.get(profile) is not None:
-            headers["if-modified-since"] = self.last_installations_request
+            headers["if-modified-since"] = self.last_installations_request[profile]
         res = requests.get(
             url,
             headers=headers,
@@ -541,7 +538,7 @@ class Client:
         )
         res.raise_for_status()
         if res.status_code == 301:
-            self.logger.debug(f"No changes since {self.last_installations_request}")
+            self.logger.debug(f"No changes since {self.last_installations_request[profile]}")
             for v in self.install_cache.items.values():
                 yield v
             return
@@ -559,7 +556,7 @@ class Client:
                 binding_id=binding["id"],
                 content_addr=binding["contentAddress"],
                 name=install.get("name", ""),
-                slug=Slug.parse(install["servlet"]["slug"]),
+                slug=ProfileSlug.parse(install["servlet"]["slug"]),
                 settings=install["settings"],
                 tools={},
             )
@@ -691,7 +688,7 @@ class Client:
         data = res.json()
         for servlet in data:
             yield ServletSearchResult(
-                slug=Slug.parse(servlet["slug"]),
+                slug=ProfileSlug.parse(servlet["slug"]),
                 meta=servlet.get("meta", {}),
                 installation_count=servlet["installation_count"],
                 visibility=servlet["visibility"],
@@ -785,7 +782,7 @@ class Client:
         plugin = self.plugin(tool.servlet, wasi=wasi, functions=functions, wasm=wasm)
         return plugin.call(tool=tool.name, input=input)
 
-    def delete_profile(self, profile: str | Profile | Slug):
+    def delete_profile(self, profile: str | Profile | ProfileSlug):
         """
         Delete a profile
         """

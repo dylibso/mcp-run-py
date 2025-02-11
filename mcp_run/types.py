@@ -10,7 +10,7 @@ class InvalidUserError(BaseException):
     pass
 
 
-class Slug(str):
+class ProfileSlug(str):
     """
     A slug made of a username and name separated by a slash
     """
@@ -30,12 +30,16 @@ class Slug(str):
     def parse(s):
         t = s.split("/")
         if len(t) == 1:
-            return Slug("~", s)
-        return Slug(t[0], t[1])
+            return ProfileSlug("~", s)
+        return ProfileSlug(t[0], t[1])
 
-    def _current_user(self, user) -> Slug:
+    @staticmethod
+    def current_user(profile_name):
+        return ProfileSlug("~", profile_name)
+
+    def _current_user(self, user) -> ProfileSlug:
         if self.user == "~" or self.user == user:
-            return Slug("~", self.name)
+            return ProfileSlug("~", self.name)
         raise InvalidUserError(self.user)
 
 
@@ -77,7 +81,7 @@ class Servlet:
     Servlet installation name
     """
 
-    slug: Slug
+    slug: ProfileSlug
     """
     Servlet slug
     """
@@ -126,7 +130,7 @@ class ServletSearchResult:
     Details about a servlet from the search endpoint
     """
 
-    slug: Slug
+    slug: ProfileSlug
     """
     Servlet slug
     """
