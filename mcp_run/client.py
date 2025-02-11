@@ -474,7 +474,6 @@ class Client:
             else:
                 tools = [tools]
             install = Servlet(
-                installed=True,
                 binding_id=binding["id"],
                 content_addr=binding["contentAddress"],
                 name=install.get("name", ""),

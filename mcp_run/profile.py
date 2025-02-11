@@ -3,10 +3,6 @@ from dataclasses import dataclass
 from datetime import datetime
 from typing import TYPE_CHECKING
 
-import requests
-
-from .types import Servlet
-
 if TYPE_CHECKING:
     from .client import Client
 
@@ -42,6 +38,6 @@ class Profile:
         kw["profile"] = self
         return self._client.install(*args, **kw)
 
-    def uninstall(self):
+    def uninstall(self, *args, **kw):
         kw["profile"] = self
         return self._client.uninstall(*args, **kw)

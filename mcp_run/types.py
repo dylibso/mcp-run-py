@@ -36,12 +36,12 @@ class Tool:
 @dataclass
 class Servlet:
     """
-    An mcp.run servlet
+    An installed mcp.run servlet
     """
 
     name: str
     """
-    Servlet name
+    Servlet installation name
     """
 
     slug: str
@@ -62,11 +62,6 @@ class Servlet:
     settings: dict
     """
     Servlet settings and permissions
-    """
-
-    installed: bool
-    """
-    Marks whether the servlet is installed
     """
 
     tools: Dict[str, Tool]
@@ -90,6 +85,14 @@ class Servlet:
             and self.slug == other.slug
             and self.name == other.name
         )
+
+    @property
+    def slug_user(self):
+        return self.slug.split("/")[0]
+
+    @property
+    def slug_name(self):
+        return self.slug.split("/")[1]
 
 
 @dataclass
@@ -127,6 +130,14 @@ class ServletSearchResult:
     """
     Modification timestamp
     """
+
+    @property
+    def slug_user(self):
+        return self.slug.split("/")[0]
+
+    @property
+    def slug_name(self):
+        return self.slug.split("/")[1]
 
 
 @dataclass

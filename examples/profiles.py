@@ -1,4 +1,4 @@
-import util
+import util # noqa: F401
 from mcp_run import Client  # Import the mcp.run client
 
 client = Client()  # Create the client, this will check the
@@ -24,13 +24,11 @@ r = list(client.search("evaluate javascript"))
 # Install
 client.install(r[0], name="evaljs")
 
-# List installs
+# List installs and uninstall them
 p = client.profiles["~"]["python-test-profile"]
 for install in p.list_installs():
-    print("python-test-profile", install)
-
-# Uninstall
-client.uninstall("evaljs")
+    print("python-test-profile:", install)
+    client.uninstall(install)
 
 # Delete the profile
 client.delete_profile(profile)
