@@ -99,11 +99,34 @@ class ServletSearchResult:
     """
 
     slug: str
+    """
+    Servlet slug
+    """
+
     meta: dict
+    """
+    Servlet metadata
+    """
+
     installation_count: int
+    """
+    Number of times the servlet has been installed
+    """
+
     visibility: str
+    """
+    Public/private
+    """
+
     created_at: datetime
+    """
+    Creation timestamp
+    """
+
     modified_at: datetime
+    """
+    Modification timestamp
+    """
 
 
 @dataclass
