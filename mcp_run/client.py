@@ -73,7 +73,7 @@ class Client:
             print(f"{profile.slug}: {profile.description}")
 
         # Install and use a tool
-        results = client.call_tool("tool-name", input={"param": "value"})
+        results = client.call_tool("tool-name", params={"param": "value"})
         ```
 
     Args:
@@ -678,11 +678,11 @@ class Client:
     def call_tool(
         self,
         tool: str | Tool,
-        input_params: dict = {},
+        params: dict = {},
         *,
-        enable_wasi: bool = True,
-        extra_functions: List[ext.Function] | None = None,
-        extra_modules: List[Dict[str, bytes]] | None = None,
+        wasi: bool = True,
+        functions: List[ext.Function] | None = None,
+        wasm: List[Dict[str, bytes]] | None = None,
     ) -> CallResult:
         """
         Call a tool with the given input parameters.
@@ -692,10 +692,10 @@ class Client:
 
         Args:
             tool: Name of the tool or Tool instance to call
-            input_params: Dictionary of input parameters matching the tool's schema
-            enable_wasi: Whether to enable WASI support for the tool
-            extra_functions: Optional list of additional Extism functions to include
-            extra_modules: Optional list of additional WASM modules to load
+            params: Dictionary of input parameters matching the tool's schema
+            wasi: Whether to enable WASI support for the tool
+            functions: Optional list of additional Extism functions to include
+            wasm: Optional list of additional WASM modules to load
 
         Returns:
             CallResult containing the tool's output and metadata
@@ -725,11 +725,11 @@ class Client:
             tool = found_tool
         plugin = self.plugin(
             tool.servlet,
-            wasi=enable_wasi,
-            functions=extra_functions,
-            wasm=extra_modules
+            wasi=wasi,
+            functions=functions,
+            wasm=wasm
         )
-        return plugin.call(tool=tool.name, input=input_params)
+        return plugin.call(tool=tool.name, input=params)
 
     def delete_profile(self, profile: str | Profile | ProfileSlug):
         """

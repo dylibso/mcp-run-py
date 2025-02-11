@@ -43,7 +43,7 @@ class TestClient(unittest.TestCase):
 
     def test_call(self):
         client = self.client()
-        results = client.call_tool("eval-js", {"code": "'Hello, world!'"})
+        results = client.call_tool("eval-js", params={"code": "'Hello, world!'"})
         for content in results.content:
             self.assertEqual(content.text, "Hello, world!")
 
