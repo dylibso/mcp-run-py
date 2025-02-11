@@ -1,4 +1,4 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 import os
 import json
 from pathlib import Path
@@ -11,7 +11,7 @@ import requests
 import extism as ext
 
 from .api import Api
-from .types import Servlet, ServletSearchResult, CallResult, Content, Tool
+from .types import Servlet, ServletSearchResult, CallResult, Content, Tool, Slug
 from .profile import Profile
 from .task import TaskRunner, Task, TaskRun
 
@@ -114,7 +114,7 @@ class ClientConfig:
     Python logger
     """
 
-    profile: str = "default"
+    profile: Slug = field(default_factory=lambda: Slug("~", "default"))
     """
     mcp.run profile name
     """
@@ -124,6 +124,16 @@ class ClientConfig:
         Configure logging using logging.basicConfig
         """
         return logging.basicConfig(*args, **kw)
+
+    def with_profile(self, profile: str | Slug):
+        """
+        Update the configured profile
+        """
+        if isinstance(profile, Slug):
+            self.profile = profile
+        else:
+            self.profile = Slug.parse(profile)
+        return self
 
 
 class Cache[K, T]:
@@ -162,6 +172,19 @@ class Cache[K, T]:
             return True
         now = datetime.now()
         return now - self.last_update >= self.duration
+
+
+@dataclass
+class UserEmail:
+    email: str
+    primary: bool
+    verified: bool
+
+
+@dataclass
+class User:
+    username: str
+    emails: List[UserEmail]
 
 
 class Client:
@@ -204,6 +227,8 @@ class Client:
     Date header from last installations request
     """
 
+    _user: User | None = None
+
     def __init__(
         self,
         session_id: str | None = None,
@@ -220,9 +245,21 @@ class Client:
         self.plugin_cache = Cache()
         self.logger = config.logger
         self.config = config
+        self._user = None
 
         if log_level is not None:
             self.configure_logging(level=log_level)
+
+    def _fix_profile(self, profile: str | Slug | Profile | None, user=False) -> Slug:
+        if user:
+            return self._fix_profile(profile, user=False)._current_user(self.user.username)
+        if profile is None:
+            return self.config.profile
+        elif isinstance(profile, Profile):
+            return profile.slug
+        elif isinstance(profile, str):
+            return Slug.parse(profile)
+        return profile
 
     def configure_logging(self, *args, **kw):
         """
@@ -235,12 +272,34 @@ class Client:
         self.install_cache.clear()
         self.plugin_cache.clear()
 
-    def set_profile(self, profile: str | Profile):
+    @property
+    def user(self) -> User:
+        """
+        Get current logged in user
+        """
+        if self._user is not None:
+            return self._user
+        url = self.api.current_user()
+        res = requests.get(url, cookies={"sessionId": self.session_id})
+        res.raise_for_status()
+        data = res.json()
+        self._user = User(
+            username=data["username"],
+            emails=[
+                UserEmail(
+                    email=x["email"], primary=x["primary"], verified=x["verified"]
+                )
+                for x in data["emails"]
+            ],
+        )
+        return self._user
+
+    def set_profile(self, profile: str | Slug | Profile):
         """
         Select a profile
         """
-        if isinstance(profile, Profile):
-            self.profile = profile.slug
+        profile = self._fix_profile(profile, user=True)
+
         if profile != self.config.profile:
             self.config.profile = profile
             self.clear_cache()
@@ -253,15 +312,17 @@ class Client:
         prompt: str,
         api_key: str | None = None,
         settings: dict | None = None,
+        profile: Profile | Slug | str | None = None,
     ) -> Task:
         """
         Create a new task
         """
+        profile = self._fix_profile(profile, user=True)
         if api_key is None and runner.lower() == "openai":
             api_key = os.environ.get("OPENAI_API_KEY")
         elif api_key is None and runner.lower() == "anthropic":
             api_key = os.environ.get("ANTHROPIC_API_KEY")
-        url = self.api.create_task(self.config.profile, task_name)
+        url = self.api.create_task(profile, task_name)
         self.logger.info(f"Creating mcp.run task {url}")
         settings = settings or {}
         if "key" not in settings and api_key is not None:
@@ -280,7 +341,10 @@ class Client:
         return Task(
             _client=self,
             name=data["name"],
-            slug=data["slug"],
+            profile=Slug.parse("/".join(data["slug"].split("/")[:2]))._current_user(
+                self.user.username
+            ),
+            task_slug=data["slug"],
             runner=data["runner"],
             settings=data["settings"],
             prompt=prompt,
@@ -300,14 +364,14 @@ class Client:
         Create a new profile
         """
         params = {"description": description, "is_public": is_public}
-        url = self.api.create_profile(name)
+        url = self.api.create_profile(profile=Slug("~", name))
         self.logger.info(f"Creating profile {name} {url}")
         res = requests.post(url, cookies={"sessionId": self.session_id}, json=params)
         res.raise_for_status()
         data = res.json()
         p = Profile(
             _client=self,
-            slug=data["slug"],
+            slug=Slug("~", name),
             description=data["description"],
             is_public=data["is_public"],
             created_at=datetime.fromisoformat(data["created_at"]),
@@ -329,7 +393,7 @@ class Client:
         for p in data:
             profile = Profile(
                 _client=self,
-                slug=p["slug"],
+                slug=Slug.parse(p["slug"]),
                 description=p["description"],
                 is_public=p["is_public"],
                 created_at=datetime.fromisoformat(p["created_at"]),
@@ -349,7 +413,7 @@ class Client:
         for p in data:
             profile = Profile(
                 _client=self,
-                slug=p["slug"],
+                slug=Slug.parse(p["slug"]),
                 description=p["description"],
                 is_public=p["is_public"],
                 created_at=datetime.fromisoformat(p["created_at"]),
@@ -366,10 +430,11 @@ class Client:
         for profile in self.list_public_profiles():
             yield profile
 
-    def list_tasks(self) -> Iterator[Task]:
+    def list_tasks(self, profile: Profile | Slug | str | None = None) -> Iterator[Task]:
         """
         List all tasks associated with the configured profile
         """
+        profile = self._fix_profile(profile, user=True)
         url = self.api.tasks()
         self.logger.info(f"Listing mcp.run tasks from {url}")
         res = requests.get(url, cookies={"sessionId": self.session_id})
@@ -379,7 +444,10 @@ class Client:
             task = Task(
                 _client=self,
                 name=t["name"],
-                slug=t["slug"],
+                task_slug=t["slug"],
+                profile=Slug.parse("/".join(t["slug"].split("/")[:2]))._current_user(
+                    self.user.username
+                ),
                 runner=t["runner"],
                 settings=t.get("settings", {}),
                 prompt=t[t["runner"]]["prompt"],
@@ -387,17 +455,20 @@ class Client:
                 created_at=datetime.fromisoformat(t["created_at"]),
                 modified_at=datetime.fromisoformat(t["modified_at"]),
             )
-            if task.profile != self.config.profile:
+            if task.profile != str(profile):
                 continue
             yield task
 
-    def list_task_runs(self, task: Task | str) -> Iterator[TaskRun]:
+    def list_task_runs(
+        self, task: Task | str, profile: Profile | Slug | str | None = None
+    ) -> Iterator[TaskRun]:
         """
         List all tasks runs associated with the configured profile
         """
+        profile = self._fix_profile(profile, user=True)
         if isinstance(task, Task):
             task = task.name
-        url = self.api.task_runs(self.config.profile, task)
+        url = self.api.task_runs(profile, task)
         self.logger.info(f"Listing mcp.run task runs from {url}")
         res = requests.get(url, cookies={"sessionId": self.session_id})
         res.raise_for_status()
@@ -406,7 +477,10 @@ class Client:
             task = Task(
                 _client=self,
                 name=t["name"],
-                slug=t["slug"],
+                task_slug=t["slug"],
+                profile=Slug.parse("/".join(t["slug"].split("/")[:2]))._current_user(
+                    self.user.username
+                ),
                 runner=t["runner"],
                 settings=t.get("settings", {}),
                 prompt=t[t["runner"]]["prompt"],
@@ -435,25 +509,24 @@ class Client:
         """
         p = {}
         for profile in self.list_user_profiles():
-            if profile.username not in p:
-                p[profile.username] = {}
-            p[profile.username][profile.name] = profile
-            p["~"] = p[profile.username]
+            if profile.slug.user not in p:
+                p[profile.slug.user] = {}
+            p[profile.slug.user][profile.slug.name] = profile
+            p["~"] = p[profile.slug.user]
         for profile in self.list_public_profiles():
-            if profile.username not in p:
-                p[profile.username] = {}
-            p[profile.username][profile.name] = profile
+            if profile.slug.user not in p:
+                p[profile.slug.user] = {}
+            p[profile.slug.user][profile.slug.name] = profile
         return p
 
-    def list_installs(self, profile: str | Profile | None = None) -> Iterator[Servlet]:
+    def list_installs(
+        self, profile: str | Profile | Slug | None = None
+    ) -> Iterator[Servlet]:
         """
         List all installed servlets, this will make an HTTP
         request each time
         """
-        if profile is None:
-            profile = self.config.profile
-        elif isinstance(profile, Profile):
-            profile = profile.slug
+        profile = self._fix_profile(profile)
         url = self.api.installations(profile)
         self.logger.info(f"Listing installed mcp.run servlets from {url}")
         headers = {}
@@ -486,7 +559,7 @@ class Client:
                 binding_id=binding["id"],
                 content_addr=binding["contentAddress"],
                 name=install.get("name", ""),
-                slug=install["servlet"]["slug"],
+                slug=Slug.parse(install["servlet"]["slug"]),
                 settings=install["settings"],
                 tools={},
             )
@@ -618,7 +691,7 @@ class Client:
         data = res.json()
         for servlet in data:
             yield ServletSearchResult(
-                slug=servlet["slug"],
+                slug=Slug.parse(servlet["slug"]),
                 meta=servlet.get("meta", {}),
                 installation_count=servlet["installation_count"],
                 visibility=servlet["visibility"],
@@ -645,8 +718,6 @@ class Client:
         Returns:
             An InstalledPlugin instance
         """
-        if not install.installed:
-            raise Exception(f"Servlet {install.name} must be installed before use")
         cache_name = f"{install.name}-{wasi}"
         if functions is not None:
             for func in functions:
@@ -714,12 +785,11 @@ class Client:
         plugin = self.plugin(tool.servlet, wasi=wasi, functions=functions, wasm=wasm)
         return plugin.call(tool=tool.name, input=input)
 
-    def delete_profile(self, profile: str | Profile):
+    def delete_profile(self, profile: str | Profile | Slug):
         """
         Delete a profile
         """
-        if isinstance(profile, Profile):
-            profile = profile.name
+        profile = self._fix_profile(profile, user=True)
         url = self.api.delete_profile(profile)
         res = requests.delete(
             url,

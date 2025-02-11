@@ -1,4 +1,4 @@
-import util # noqa: F401
+import util  # noqa: F401
 from mcp_run import Client  # Import the mcp.run client
 
 client = Client()  # Create the client, this will check the
@@ -10,25 +10,31 @@ client = Client()  # Create the client, this will check the
 featured = client.profiles["dylibso"]["featured"]
 
 # List installs
+print("Featured servlets:") 
 for install in featured.list_installs():
-    print(install)
+    print(f"  {install.slug}")
 
 # Create a new profile
+print("Creating python-test-profile")
 profile = client.create_profile(
     "python-test-profile", description="this is a test", set_current=True
 )
 
 # Search for servlets
+print("Searching for servlets to evaluate JavaScript code")
 r = list(client.search("evaluate javascript"))
+print(f"Found {r[0].slug}")
 
-# Install
+# Install evaljs
+print(f"Installing {r[0].slug}")
 client.install(r[0], name="evaljs")
 
-# List installs and uninstall them
+# List installed servlets and uninstall them
 p = client.profiles["~"]["python-test-profile"]
 for install in p.list_installs():
-    print("python-test-profile:", install)
+    print("Uninstalling", install.slug)
     client.uninstall(install)
 
 # Delete the profile
+print(f"Deleting python-test-profile")
 client.delete_profile(profile)

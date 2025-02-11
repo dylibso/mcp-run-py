@@ -6,6 +6,39 @@ from datetime import datetime
 import json
 
 
+class InvalidUserError(BaseException):
+    pass
+
+
+class Slug(str):
+    """
+    A slug made of a username and name separated by a slash
+    """
+
+    def __new__(cls, user, name):
+        return str.__new__(cls, f"{user}/{name}")
+
+    @property
+    def user(self):
+        return self.split("/")[0]
+
+    @property
+    def name(self):
+        return self.split("/")[1]
+
+    @staticmethod
+    def parse(s):
+        t = s.split("/")
+        if len(t) == 1:
+            return Slug("~", s)
+        return Slug(t[0], t[1])
+
+    def _current_user(self, user) -> Slug:
+        if self.user == "~" or self.user == user:
+            return Slug("~", self.name)
+        raise InvalidUserError(self.user)
+
+
 @dataclass
 class Tool:
     """
@@ -44,7 +77,7 @@ class Servlet:
     Servlet installation name
     """
 
-    slug: str
+    slug: Slug
     """
     Servlet slug
     """
@@ -86,14 +119,6 @@ class Servlet:
             and self.name == other.name
         )
 
-    @property
-    def slug_user(self):
-        return self.slug.split("/")[0]
-
-    @property
-    def slug_name(self):
-        return self.slug.split("/")[1]
-
 
 @dataclass
 class ServletSearchResult:
@@ -101,7 +126,7 @@ class ServletSearchResult:
     Details about a servlet from the search endpoint
     """
 
-    slug: str
+    slug: Slug
     """
     Servlet slug
     """
@@ -130,14 +155,6 @@ class ServletSearchResult:
     """
     Modification timestamp
     """
-
-    @property
-    def slug_user(self):
-        return self.slug.split("/")[0]
-
-    @property
-    def slug_name(self):
-        return self.slug.split("/")[1]
 
 
 @dataclass

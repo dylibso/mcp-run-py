@@ -1,6 +1,15 @@
 from dataclasses import dataclass
 import urllib
 
+from .types import Slug, InvalidUserError
+
+
+def fix_profile(p: Slug, only_self=False):
+    if only_self:
+        if p.user != "~":
+            raise InvalidUserError(p.user)
+    return str(p)
+
 
 @dataclass
 class Api:
@@ -13,25 +22,29 @@ class Api:
     mcp.run base URL
     """
 
-    def installations(self, profile):
+    def current_user(self):
+        return f"{self.base}/api/users/~"
+
+    def installations(self, profile: Slug):
         """
         List installations
         """
-        if "/" in profile:
-            return f"{self.base}/api/profiles/{profile}/installations"
-        return f"{self.base}/api/profiles/~/{profile}/installations"
+        profile = fix_profile(profile)
+        return f"{self.base}/api/profiles/{profile}/installations"
 
-    def install(self, profile):
+    def install(self, profile: Slug):
         """
         Install a servlet to a profile
         """
-        return f"{self.base}/api/profiles/~/{profile}/installations"
+        profile = fix_profile(profile, only_self=True)
+        return f"{self.base}/api/profiles/{profile}/installations"
 
-    def uninstall(self, profile, installation):
+    def uninstall(self, profile: Slug, installation: str):
         """
         Uninstall a servlet from a profile
         """
-        return f"{self.base}/api/profiles/~/{profile}/installations/{installation}"
+        profile = fix_profile(profile, only_self=True)
+        return f"{self.base}/api/profiles/{profile}/installations/{installation}"
 
     def tasks(self):
         """
@@ -39,28 +52,25 @@ class Api:
         """
         return f"{self.base}/api/users/~/tasks"
 
-    def create_task(self, profile, task):
+    def create_task(self, profile: Slug, task: str):
         """
         Create task
         """
-        if "/" not in profile:
-            profile = f"~/{profile}"
+        profile = fix_profile(profile, only_self=True)
         return f"{self.base}/api/tasks/{profile}/{task}"
 
-    def task_signed_url(self, profile, task):
+    def task_signed_url(self, profile: Slug, task: str):
         """
         Get a signed URL for a task
         """
-        if "/" not in profile:
-            profile = f"~/{profile}"
+        profile = fix_profile(profile, only_self=True)
         return f"{self.base}/api/tasks/{profile}/{task}/signed"
 
-    def task_runs(self, profile, task):
+    def task_runs(self, profile: Slug, task: str):
         """
         Get a list of runs
         """
-        if "/" not in profile:
-            profile = f"~/{profile}"
+        profile = fix_profile(profile, only_self=True)
         return f"{self.base}/api/runs/{profile}/{task}"
 
     def profiles(self, user: str = "~"):
@@ -75,18 +85,18 @@ class Api:
         """
         return f"{self.base}/api/profiles"
 
-    def delete_profile(self, profile):
+    def delete_profile(self, profile: Slug):
         """
         Delete profile
         """
-        return f"{self.base}/api/profiles/~/{profile}"
+        profile = fix_profile(profile, only_self=True)
+        return f"{self.base}/api/profiles/{profile}"
 
     def create_profile(self, profile):
         """
         Create a new profile
         """
-        if "/" not in profile:
-            profile = f"~/{profile}"
+        profile = fix_profile(profile, only_self=True)
         return f"{self.base}/api/profiles/{profile}"
 
     def search(self, query):

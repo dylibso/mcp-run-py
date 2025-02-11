@@ -5,6 +5,8 @@ from datetime import datetime, timedelta
 from enum import StrEnum
 from time import sleep
 
+from .types import Slug
+
 if TYPE_CHECKING:
     from .client import Client
 
@@ -87,9 +89,14 @@ class Task:
     Task name
     """
 
-    slug: str
+    task_slug: str
     """
-    Task full identifier
+    Full task identifier
+    """
+
+    profile: Slug
+    """
+    Task profile
     """
 
     runner: TaskRunner
@@ -115,19 +122,12 @@ class Task:
     created_at: datetime
     modified_at: datetime
 
-    @property
-    def profile(self) -> str:
-        """
-        Get the task profile name
-        """
-        return self.slug.split("/")[1]
-
     def signed_url(self) -> str:
         """
         Get a signed URL for a task
         """
         url = self._client.api.task_signed_url(self.profile, self.name)
-        self._client.logger.info(f"Creating signed url for {self.slug}")
+        self._client.logger.info(f"Creating signed url for {self.task_slug}")
         res = requests.post(url, cookies={"sessionId": self._client.session_id})
         res.raise_for_status()
         data = res.json()
