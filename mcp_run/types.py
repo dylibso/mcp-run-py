@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Optional, Dict
+from typing import Optional, Dict, List
+from datetime import datetime
+import json
 
 
 @dataclass
@@ -88,6 +90,20 @@ class Servlet:
             and self.slug == other.slug
             and self.name == other.name
         )
+
+
+@dataclass
+class ServletSearchResult:
+    """
+    Details about a servlet from the search endpoint
+    """
+
+    slug: str
+    meta: dict
+    installation_count: int
+    visibility: str
+    created_at: datetime
+    modified_at: datetime
 
 
 @dataclass

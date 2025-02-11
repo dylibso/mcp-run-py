@@ -21,6 +21,18 @@ class Api:
             return f"{self.base}/api/profiles/{profile}/installations"
         return f"{self.base}/api/profiles/~/{profile}/installations"
 
+    def install(self, profile):
+        """
+        Install a servlet to a profile
+        """
+        return f"{self.base}/api/profiles/~/{profile}/installations"
+
+    def uninstall(self, profile, installation):
+        """
+        Uninstall a servlet from a profile
+        """
+        return f"{self.base}/api/profiles/~/{profile}/installations/{installation}"
+
     def tasks(self):
         """
         List tasks
@@ -32,7 +44,7 @@ class Api:
         Create task
         """
         if "/" not in profile:
-            profile = "~/{profile}"
+            profile = f"~/{profile}"
         return f"{self.base}/api/tasks/{profile}/{task}"
 
     def task_signed_url(self, profile, task):
@@ -40,7 +52,7 @@ class Api:
         Get a signed URL for a task
         """
         if "/" not in profile:
-            profile = "~/{profile}"
+            profile = f"~/{profile}"
         return f"{self.base}/api/tasks/{profile}/{task}/signed"
 
     def task_runs(self, profile, task):
@@ -48,7 +60,7 @@ class Api:
         Get a list of runs
         """
         if "/" not in profile:
-            profile = "~/{profile}"
+            profile = f"~/{profile}"
         return f"{self.base}/api/runs/{profile}/{task}"
 
     def profiles(self, user: str = "~"):
@@ -67,8 +79,14 @@ class Api:
         """
         Delete profile
         """
+        return f"{self.base}/api/profiles/~/{profile}"
+
+    def create_profile(self, profile):
+        """
+        Create a new profile
+        """
         if "/" not in profile:
-            profile = "~/{profile}"
+            profile = f"~/{profile}"
         return f"{self.base}/api/profiles/{profile}"
 
     def search(self, query):

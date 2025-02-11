@@ -11,7 +11,7 @@ import requests
 import extism as ext
 
 from .api import Api
-from .types import Servlet, CallResult, Content, Tool
+from .types import Servlet, ServletSearchResult, CallResult, Content, Tool
 from .profile import Profile
 from .task import TaskRunner, Task, TaskRun
 
@@ -150,7 +150,7 @@ class Cache[K, T]:
 
     def clear(self):
         self.items = {}
-        self.last_update = datetime.now()
+        self.last_update = None
 
     def set_last_update(self):
         self.last_update = datetime.now()
@@ -199,7 +199,7 @@ class Client:
     Cache of InstalledPlugins
     """
 
-    last_installations_request: str | None = None
+    last_installations_request: Dict[str, str] = {}
     """
     Date header from last installations request
     """
@@ -230,14 +230,20 @@ class Client:
         """
         return logging.basicConfig(*args, **kw)
 
+    def clear_cache(self):
+        self.last_installations_request = {}
+        self.install_cache.clear()
+        self.plugin_cache.clear()
+
     def set_profile(self, profile: str | Profile):
         """
         Select a profile
         """
         if isinstance(profile, Profile):
             profile = profile.slug
-        self.config.profile = profile
-        self.last_installations_request = None
+        if profile != self.config.profile:
+            self.config.profile = profile
+            self.clear_cache()
 
     def create_task(
         self,
@@ -283,7 +289,31 @@ class Client:
             modified_at=datetime.fromisoformat(data["modified_at"]),
         )
 
+    def create_profile(
+        self, name: str, description: str = "", is_public: bool = False
+    ) -> Profile:
+        """
+        Create a new profile
+        """
+        params = {"description": description, "is_public": is_public}
+        url = self.api.create_profile(name)
+        self.logger.info(f"Creating profile {name} {url}")
+        res = requests.post(url, cookies={"sessionId": self.session_id}, json=params)
+        res.raise_for_status()
+        data = res.json()
+        return Profile(
+            _client=self,
+            slug=data["slug"],
+            description=data["description"],
+            is_public=data["is_public"],
+            created_at=datetime.fromisoformat(data["created_at"]),
+            modified_at=datetime.fromisoformat(data["modified_at"]),
+        )
+
     def list_user_profiles(self) -> Iterator[Profile]:
+        """
+        List all profiles created by the logged in user
+        """
         url = self.api.profiles()
         self.logger.info(f"Listing mcp.run profiles from {url}")
         res = requests.get(url, cookies={"sessionId": self.session_id})
@@ -301,6 +331,9 @@ class Client:
             yield profile
 
     def list_public_profiles(self) -> Iterator[Profile]:
+        """
+        List all public profiles
+        """
         url = self.api.public_profiles()
         self.logger.info(f"Listing mcp.run public profiles from {url}")
         res = requests.get(url, cookies={"sessionId": self.session_id})
@@ -389,23 +422,26 @@ class Client:
             if profile.username not in p:
                 p[profile.username] = {}
             p[profile.username][profile.name] = profile
+            p["~"] = p[profile.username]
         for profile in self.list_public_profiles():
             if profile.username not in p:
                 p[profile.username] = {}
             p[profile.username][profile.name] = profile
         return p
 
-    def list_installs(self, profile=None) -> Iterator[Servlet]:
+    def list_installs(self, profile: str | Profile | None = None) -> Iterator[Servlet]:
         """
         List all installed servlets, this will make an HTTP
         request each time
         """
         if profile is None:
             profile = self.config.profile
+        elif isinstance(profile, Profile):
+            profile = profile.slug
         url = self.api.installations(profile)
         self.logger.info(f"Listing installed mcp.run servlets from {url}")
         headers = {}
-        if self.last_installations_request is not None:
+        if self.last_installations_request.get(profile) is not None:
             headers["if-modified-since"] = self.last_installations_request
         res = requests.get(
             url,
@@ -420,7 +456,7 @@ class Client:
             for v in self.install_cache.items.values():
                 yield v
             return
-        self.last_installations_request = res.headers.get("Date")
+        self.last_installations_request[profile] = res.headers.get("Date")
         data = res.json()
         self.logger.debug(f"Got installed servlets from {url}: {data}")
         for install in data["installs"]:
@@ -469,6 +505,68 @@ class Client:
             self.install_cache.set_last_update()
         return self.install_cache.items
 
+    def uninstall(self, servlet: Servlet | str, profile: Profile | None = None):
+        """
+        Uninstall a servlet
+        """
+        profile_name = self.config.profile
+        if profile is not None:
+            profile_name = profile.name
+        if isinstance(servlet, Servlet):
+            servlet = servlet.name
+        url = self.api.uninstall(profile_name, servlet)
+        res = requests.delete(
+            url,
+            cookies={
+                "sessionId": self.session_id,
+            },
+        )
+        res.raise_for_status()
+        if profile is None:
+            self.clear_cache()
+
+    def install(
+        self,
+        servlet: Servlet | ServletSearchResult,
+        name: str | None = None,
+        allow_update: bool = True,
+        config: dict | None = None,
+        network: dict | None = None,
+        filesystem: dict | None = None,
+        profile: Profile | None = None,
+    ):
+        """
+        Install a servlet
+        """
+        profile_name = self.config.profile
+        if profile is not None:
+            profile_name = profile.name
+        settings = {}
+        if config is not None:
+            settings["config"] = config
+        if network is not None:
+            settings["network"] = network
+        if filesystem is not None:
+            settings["filesystem"] = filesystem
+        params = {
+            "servlet_slug": servlet.slug,
+            "settings": settings,
+            "allow_update": allow_update,
+        }
+        if name is not None:
+            params["name"] = name
+        url = self.api.install(profile_name)
+        res = requests.post(
+            url,
+            json=params,
+            cookies={
+                "sessionId": self.session_id,
+            },
+        )
+        res.raise_for_status()
+        if profile is None:
+            self.clear_cache()
+
     @property
     def tools(self) -> Dict[str, Tool]:
         """
@@ -491,7 +589,7 @@ class Client:
                     return tool
         return None
 
-    def search(self, query: str) -> List[dict]:
+    def search(self, query: str) -> Iterator[ServletSearchResult]:
         """
         Search for tools on mcp.run
         """
@@ -503,7 +601,15 @@ class Client:
             },
         )
         data = res.json()
-        return data
+        for servlet in data:
+            yield ServletSearchResult(
+                slug=servlet["slug"],
+                meta=servlet.get("meta", {}),
+                installation_count=servlet["installation_count"],
+                visibility=servlet["visibility"],
+                created_at=datetime.fromisoformat(servlet["created_at"]),
+                modified_at=datetime.fromisoformat(servlet["modified_at"]),
+            )
 
     def plugin(
         self,
@@ -598,8 +704,8 @@ class Client:
         Delete a profile
         """
         if isinstance(profile, Profile):
-            profile = profile.slug
-        url = self._client.api.delete_profile(profile)
+            profile = profile.name
+        url = self.api.delete_profile(profile)
         res = requests.delete(
             url,
             cookies={
