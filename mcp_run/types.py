@@ -6,39 +6,76 @@ from datetime import datetime
 import json
 
 
-class InvalidUserError(BaseException):
+class MCPRunError(Exception):
+    """Base exception class for MCP-related errors"""
     pass
+
+class InvalidUserError(MCPRunError):
+    """Raised when attempting to access or modify a profile belonging to another user"""
+    def __init__(self, user: str):
+        self.user = user
+        super().__init__(f"Cannot access profile for user '{user}' - only '~' (self) is allowed")
 
 
 class ProfileSlug(str):
     """
-    A slug made of a username and name separated by a slash
+    A profile identifier consisting of a username and profile name separated by a slash.
+
+    Format: "{username}/{profile_name}"
+
+    Special cases:
+    - "~" as username refers to the current authenticated user
+    - An empty username is converted to "~"
+
+    Examples:
+        ProfileSlug("alice", "dev")  # -> "alice/dev"
+        ProfileSlug("~", "prod")     # -> "~/prod" (current user)
+        ProfileSlug.parse("bob/test") # -> ProfileSlug("bob", "test")
+        ProfileSlug.parse("myprof")   # -> ProfileSlug("~", "myprof")
     """
 
-    def __new__(cls, user, name):
+    def __new__(cls, user: str, name: str) -> "ProfileSlug":
+        """Create a new ProfileSlug"""
+        if not name:
+            raise ValueError("Profile name cannot be empty")
         if user == '':
             user = '~'
         return str.__new__(cls, f"{user}/{name}")
 
     @property
-    def user(self):
+    def user(self) -> str:
+        """The username portion of the slug"""
         return self.split("/")[0]
 
     @property
-    def name(self):
+    def name(self) -> str:
+        """The profile name portion of the slug"""
         return self.split("/")[1]
 
     @staticmethod
-    def parse(s):
+    def parse(s: str) -> "ProfileSlug":
+        """
+        Parse a string into a ProfileSlug.
+
+        If no username is provided (no slash), assumes current user ("~").
+        """
         if "/" not in s:
             return ProfileSlug("~", s)
-        return ProfileSlug(*s.split("/"))
+        user, name = s.split("/", 1)
+        return ProfileSlug(user, name)
 
     @staticmethod
-    def current_user(profile_name):
+    def current_user(profile_name: str) -> "ProfileSlug":
+        """Create a ProfileSlug for the current user ("~")"""
         return ProfileSlug("~", profile_name)
 
-    def _current_user(self, user) -> ProfileSlug:
+    def _current_user(self, user: str) -> "ProfileSlug":
+        """
+        Convert this slug to reference the current user if possible.
+
+        Raises:
+            InvalidUserError: If the slug references another user's profile
+        """
         if self.user == "~" or self.user == user:
             return ProfileSlug("~", self.name)
         raise InvalidUserError(self.user)
@@ -47,28 +84,32 @@ class ProfileSlug(str):
 @dataclass
 class Tool:
     """
-    A tool definition
+    Represents a callable tool provided by a servlet.
+
+    A tool is a discrete function that can be called with specific input parameters
+    defined by its input schema. Tools are provided by servlets and represent the
+    primary way to interact with servlet functionality.
     """
 
     name: str
-    """
-    Name of the tool
-    """
+    """The unique identifier for this tool within its servlet"""
 
     description: str
-    """
-    Information about the tool and how to use it
-    """
+    """Human-readable description of the tool's purpose and usage"""
 
     input_schema: dict
     """
-    Input parameter schema
+    JSON Schema defining the expected input parameters.
+
+    This schema validates the input dictionary passed to tool.call()
     """
 
     servlet: Optional[Servlet] = None
-    """
-    The servlet the tool belongs to
-    """
+    """The servlet instance that provides this tool"""
+
+    def __str__(self) -> str:
+        """Return a human-readable representation of the tool"""
+        return f"{self.servlet.name}.{self.name}" if self.servlet else self.name
 
 
 @dataclass

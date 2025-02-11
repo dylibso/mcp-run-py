@@ -18,6 +18,14 @@ from .cache import Cache
 
 @dataclass
 class UserEmail:
+    """
+    Represents an email address associated with a user account.
+
+    Attributes:
+        email: The email address string
+        primary: Whether this is the user's primary email
+        verified: Whether the email has been verified
+    """
     email: str
     primary: bool
     verified: bool
@@ -25,13 +33,54 @@ class UserEmail:
 
 @dataclass
 class User:
+    """
+    Represents an mcp.run user account.
+
+    Attributes:
+        username: The user's login name
+        emails: List of email addresses associated with this account
+    """
     username: str
     emails: List[UserEmail]
+
+    @property
+    def primary_email(self) -> UserEmail | None:
+        """Get the user's primary email address if one exists."""
+        return next((e for e in self.emails if e.primary), None)
+
+    @property
+    def verified_emails(self) -> List[UserEmail]:
+        """Get all verified email addresses for this user."""
+        return [e for e in self.emails if e.verified]
 
 
 class Client:
     """
-    mcp.run API client
+    Main client for interacting with the mcp.run API.
+
+    The Client class manages authentication, caching, and provides methods for:
+    - Managing profiles and installations
+    - Creating and running tasks
+    - Installing and calling tools/servlets
+    - Searching the mcp.run registry
+
+    Example:
+        ```python
+        client = Client()
+
+        # List available profiles
+        for profile in client.list_profiles():
+            print(f"{profile.slug}: {profile.description}")
+
+        # Install and use a tool
+        results = client.call_tool("tool-name", input={"param": "value"})
+        ```
+
+    Args:
+        session_id: Optional session ID for authentication. If not provided,
+                   will attempt to load from environment.
+        config: Optional ClientConfig instance to customize behavior.
+        log_level: Optional logging level (e.g. logging.INFO).
     """
 
     config: ClientConfig
@@ -156,12 +205,41 @@ class Client:
         runner: TaskRunner,
         model: str,
         prompt: str,
+        *,
         api_key: str | None = None,
         settings: dict | None = None,
         profile: Profile | ProfileSlug | str | None = None,
     ) -> Task:
         """
-        Create a new task
+        Create a new task for running AI model prompts.
+
+        Args:
+            task_name: Name to identify this task
+            runner: The task runner to use (e.g. "openai", "anthropic")
+            model: Model name
+            prompt: The prompt text to send to the model
+            api_key: Optional API key for the runner service. If not provided,
+                    will attempt to load from environment variables.
+            settings: Optional dict of additional runner-specific settings
+            profile: Optional profile to create task under. Defaults to current profile.
+
+        Returns:
+            A new Task instance
+
+        Raises:
+            requests.HTTPError: If the API request fails
+            ValueError: If required settings are missing
+
+        Example:
+            ```python
+            task = client.create_task(
+                "summarize",
+                runner="openai",
+                model="gpt-4",
+                prompt="Summarize this text: ...",
+            )
+            result = task.run()
+            ```
         """
         profile = self._fix_profile(profile, user=True)
         if api_key is None and runner.lower() == "openai":
@@ -597,34 +675,61 @@ class Client:
         self.plugin_cache.add(install.name, p)
         return p
 
-    def call(
+    def call_tool(
         self,
         tool: str | Tool,
-        input: dict = {},
-        wasi: bool = True,
-        functions: List[ext.Function] | None = None,
-        wasm: List[Dict[str, bytes]] | None = None,
+        input_params: dict = {},
+        *,
+        enable_wasi: bool = True,
+        extra_functions: List[ext.Function] | None = None,
+        extra_modules: List[Dict[str, bytes]] | None = None,
     ) -> CallResult:
         """
-        Call a tool with the given input
+        Call a tool with the given input parameters.
+
+        This method handles looking up the tool, instantiating the necessary plugin,
+        and executing the tool call with the provided parameters.
 
         Args:
             tool: Name of the tool or Tool instance to call
-            input: Dictionary of input parameters for the tool
-            wasi: Whether to enable WASI
-            functions: Optional list of Extism functions to include
-            wasm: Optional list of additional WASM modules
+            input_params: Dictionary of input parameters matching the tool's schema
+            enable_wasi: Whether to enable WASI support for the tool
+            extra_functions: Optional list of additional Extism functions to include
+            extra_modules: Optional list of additional WASM modules to load
 
         Returns:
-            CallResult containing the tool's output
+            CallResult containing the tool's output and metadata
+
+        Raises:
+            ValueError: If the tool is not found or input validation fails
+            RuntimeError: If the tool execution fails
+
+        Example:
+            ```python
+            # Call by name
+            result = client.call_tool("compress-image", {
+                "image": image_bytes,
+                "format": "jpeg",
+                "quality": 85
+            })
+
+            # Call using Tool instance
+            tool = client.get_tool("compress-image")
+            result = client.call_tool(tool, {...})
+            ```
         """
         if isinstance(tool, str):
             found_tool = self.tool(tool)
             if found_tool is None:
                 raise ValueError(f"Tool '{tool}' not found")
             tool = found_tool
-        plugin = self.plugin(tool.servlet, wasi=wasi, functions=functions, wasm=wasm)
-        return plugin.call(tool=tool.name, input=input)
+        plugin = self.plugin(
+            tool.servlet,
+            wasi=enable_wasi,
+            functions=extra_functions,
+            wasm=extra_modules
+        )
+        return plugin.call(tool=tool.name, input=input_params)
 
     def delete_profile(self, profile: str | Profile | ProfileSlug):
         """

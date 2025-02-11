@@ -67,7 +67,7 @@ client = Client()  # Create the client, this will check the
 # to specify a valid mcp.run session id
 
 # Call a tool with the given input
-results = client.call("eval-js", {"code": "'Hello, world!'"})
+results = client.call_tool("eval-js", {"code": "'Hello, world!'"})
 
 # Iterate over the results
 for content in results.content:
