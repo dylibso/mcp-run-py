@@ -38,7 +38,7 @@ class TestClient(unittest.TestCase):
 
     def test_list_profiles(self):
         client = self.client()
-        for profile in client.list_user_profiles():
+        for profile in client.profiles[client.user.username].values():
             self.assertEqual(profile.slug.user, client.user.username)
 
     def test_call(self):

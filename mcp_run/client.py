@@ -1,177 +1,19 @@
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 import os
-import json
-from pathlib import Path
 from typing import Iterator, Dict, List
-from datetime import datetime, timedelta
-import base64
+from datetime import datetime
 import logging
 
 import requests
 import extism as ext
 
 from .api import Api
-from .types import Servlet, ServletSearchResult, CallResult, Content, Tool, ProfileSlug
+from .types import Servlet, ServletSearchResult, CallResult, Tool, ProfileSlug
 from .profile import Profile
 from .task import TaskRunner, Task, TaskRun
-
-
-class InstalledPlugin:
-    _install: Servlet
-    _plugin: ext.Plugin
-
-    def __init__(self, install, plugin):
-        self._install = install
-        self._plugin = plugin
-
-    def call(self, tool: str | None = None, input: dict = {}) -> CallResult:
-        """
-        Call a tool with the given input
-        """
-        if tool is None:
-            tool = self._install.name
-        j = json.dumps({"params": {"arguments": input, "name": tool}})
-        r = self._plugin.call("call", j)
-        r = json.loads(r)
-
-        out = []
-        for c in r["content"]:
-            ty = c["type"]
-            if ty == "text":
-                out.append(Content(type=ty, _data=c["text"].encode()))
-            elif ty == "image":
-                out.append(
-                    Content(
-                        type=ty,
-                        _data=base64.b64decode(c["data"]),
-                        mime_type=c["mimeType"],
-                    )
-                )
-        return CallResult(content=out)
-
-
-def _parse_mcpx_config(filename: str | Path) -> str | None:
-    with open(filename) as f:
-        j = json.loads(f.read())
-        auth: str = j["authentication"][0][1]
-        s = auth.split("=", maxsplit=1)
-        return s[1]
-    return None
-
-
-def _default_session_id() -> str:
-    # Allow session id to be specified using MCP_RUN_SESSION_ID
-    id = os.environ.get("MCP_RUN_SESSION_ID", os.environ.get("MCPX_SESSION_ID"))
-    if id is not None:
-        return id
-
-    # Try ~/.config/mcpx/config.json for Linux/macOS
-    user = Path(os.path.expanduser("~"))
-    dot_config = user / ".config" / "mcpx" / "config.json"
-    if dot_config.exists():
-        return _parse_mcpx_config(dot_config)
-
-    # Try Windows paths
-    windows_config = Path(os.path.expandvars("%LOCALAPPDATA%/mcpx/config.json"))
-    if windows_config.exists():
-        return _parse_mcpx_config(windows_config)
-
-    windows_config = Path(os.path.expandvars("%APPDATA%/mcpx/config.json"))
-    if windows_config.exists():
-        return _parse_mcpx_config(windows_config)
-
-    raise Exception("No mcpx session ID found")
-
-
-def _default_update_interval():
-    ms = os.environ.get(
-        "MCP_RUN_UPDATE_INTERVAL", os.environ.get("MCPX_UPDATE_INTERVAL")
-    )
-    if ms is None:
-        return timedelta(minutes=1)
-    else:
-        return timedelta(milliseconds=int(ms))
-
-
-@dataclass
-class ClientConfig:
-    """
-    Configures an mcp.run Client
-    """
-
-    base_url: str = os.environ.get("MCP_RUN_ORIGIN", "https://www.mcp.run")
-    """
-    mcp.run base URL
-    """
-
-    tool_refresh_time: timedelta = _default_update_interval()
-    """
-    Length of time to wait between checking for new tools
-    """
-
-    logger: logging.Logger = logging.getLogger(__name__)
-    """
-    Python logger
-    """
-
-    profile: ProfileSlug = field(default_factory=lambda: ProfileSlug("~", "default"))
-    """
-    mcp.run profile name
-    """
-
-    def configure_logging(self, *args, **kw):
-        """
-        Configure logging using logging.basicConfig
-        """
-        return logging.basicConfig(*args, **kw)
-
-    def with_profile(self, profile: str | ProfileSlug):
-        """
-        Update the configured profile
-        """
-        if isinstance(profile, ProfileSlug):
-            self.profile = profile
-        else:
-            self.profile = ProfileSlug.parse(profile)
-        return self
-
-
-class Cache[K, T]:
-    items: Dict[K, T]
-    duration: timedelta
-    last_update: datetime | None = None
-
-    def __init__(self, t: timedelta | None = None):
-        self.items = {}
-        self.last_update = None
-        self.duration = t
-
-    def add(self, key: K, item: T):
-        self.items[key] = item
-
-    def remove(self, key: K):
-        self.items.pop(key, None)
-
-    def get(self, key: K) -> T | None:
-        return self.items.get(key)
-
-    def __contains__(self, key: K) -> bool:
-        return key in self.items
-
-    def clear(self):
-        self.items = {}
-        self.last_update = None
-
-    def set_last_update(self):
-        self.last_update = datetime.now()
-
-    def needs_refresh(self) -> bool:
-        if self.duration is None:
-            return False
-        if self.last_update is None:
-            return True
-        now = datetime.now()
-        return now - self.last_update >= self.duration
+from .plugin import InstalledPlugin
+from .config import ClientConfig, _default_session_id
+from .cache import Cache
 
 
 @dataclass
@@ -538,7 +380,9 @@ class Client:
         )
         res.raise_for_status()
         if res.status_code == 301:
-            self.logger.debug(f"No changes since {self.last_installations_request[profile]}")
+            self.logger.debug(
+                f"No changes since {self.last_installations_request[profile]}"
+            )
             for v in self.install_cache.items.values():
                 yield v
             return
