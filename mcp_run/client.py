@@ -357,6 +357,15 @@ class Client:
             )
             yield profile
 
+    def list_profiles(self) -> Iterator[Profile]:
+        """
+        List all public and user profiles
+        """
+        for profile in self.list_user_profiles():
+            yield profile
+        for profile in self.list_public_profiles():
+            yield profile
+
     def list_tasks(self) -> Iterator[Task]:
         """
         List all tasks associated with the configured profile
