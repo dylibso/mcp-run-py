@@ -464,7 +464,8 @@ class Client:
             for v in self.install_cache.items.values():
                 yield v
             return
-        self.last_installations_request[profile] = res.headers.get("Date")
+        if len(data["installs"]) > 0:
+            self.last_installations_request[profile] = res.headers.get("Date")
         data = res.json()
         self.logger.debug(f"Got installed servlets from {url}: {data}")
         for install in data["installs"]:
