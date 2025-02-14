@@ -28,7 +28,10 @@ class TestClient(unittest.TestCase):
 
     def test_list_installs(self):
         client = self.client()
-        for v in client.installs.values():
+        installs = list(client.list_installs())
+        i = client.installs.values()
+        self.assertEqual(len(installs), len(i))
+        for v in i:
             self.assertTrue(v.name != "")
 
     def test_search(self):
