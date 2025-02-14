@@ -457,7 +457,7 @@ class Client:
         url = self.api.installations(profile)
         self.logger.info(f"Listing installed mcp.run servlets from {url}")
         headers = {}
-        if self.last_installations_request.get(profile) is not None:
+        if set_cache and self.last_installations_request.get(profile) is not None:
             headers["if-modified-since"] = self.last_installations_request[profile]
         res = requests.get(
             url,
