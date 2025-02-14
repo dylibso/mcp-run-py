@@ -26,6 +26,7 @@ class UserEmail:
         primary: Whether this is the user's primary email
         verified: Whether the email has been verified
     """
+
     email: str
     primary: bool
     verified: bool
@@ -40,6 +41,7 @@ class User:
         username: The user's login name
         emails: List of email addresses associated with this account
     """
+
     username: str
     emails: List[UserEmail]
 
@@ -439,6 +441,14 @@ class Client:
     def list_installs(
         self, profile: str | Profile | ProfileSlug | None = None
     ) -> Iterator[Servlet]:
+        for x in self._list_installs(profile, set_cache=False):
+            yield x
+
+    def _list_installs(
+        self,
+        profile: str | Profile | ProfileSlug | None = None,
+        set_cache: bool = False,
+    ) -> Iterator[Servlet]:
         """
         List all installed servlets, this will make an HTTP
         request each time
@@ -464,9 +474,9 @@ class Client:
             for v in self.install_cache.items.values():
                 yield v
             return
-        data = res.json()
-        if res.status_code == 200 and len(data["installs"]) > 0:
+        if set_cache:
             self.last_installations_request[profile] = res.headers.get("Date")
+        data = res.json()
         self.logger.debug(f"Got installed servlets from {url}: {data}")
         for install in data["installs"]:
             binding = install["binding"]
@@ -501,7 +511,7 @@ class Client:
         if self.install_cache.needs_refresh():
             self.logger.info("Cache expired, fetching installs")
             visited = set()
-            for install in self.list_installs():
+            for install in self._list_installs(set_cache=True):
                 if install != self.install_cache.get(install.name):
                     self.install_cache.add(install.name, install)
                     self.plugin_cache.remove(install.name)
@@ -725,12 +735,7 @@ class Client:
             if found_tool is None:
                 raise ValueError(f"Tool '{tool}' not found")
             tool = found_tool
-        plugin = self.plugin(
-            tool.servlet,
-            wasi=wasi,
-            functions=functions,
-            wasm=wasm
-        )
+        plugin = self.plugin(tool.servlet, wasi=wasi, functions=functions, wasm=wasm)
         return plugin.call(tool=tool.name, input=params)
 
     def delete_profile(self, profile: str | Profile | ProfileSlug):

@@ -4,6 +4,7 @@ import extism as ext
 
 from .types import Servlet, Content, CallResult
 
+
 class InstalledPlugin:
     _install: Servlet
     _plugin: ext.Plugin

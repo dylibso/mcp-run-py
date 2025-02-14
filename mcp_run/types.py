@@ -8,13 +8,18 @@ import json
 
 class MCPRunError(Exception):
     """Base exception class for MCP-related errors"""
+
     pass
+
 
 class InvalidUserError(MCPRunError):
     """Raised when attempting to access or modify a profile belonging to another user"""
+
     def __init__(self, user: str):
         self.user = user
-        super().__init__(f"Cannot access profile for user '{user}' - only '~' (self) is allowed")
+        super().__init__(
+            f"Cannot access profile for user '{user}' - only '~' (self) is allowed"
+        )
 
 
 class ProfileSlug(str):
@@ -38,8 +43,8 @@ class ProfileSlug(str):
         """Create a new ProfileSlug"""
         if not name:
             raise ValueError("Profile name cannot be empty")
-        if user == '':
-            user = '~'
+        if user == "":
+            user = "~"
         return str.__new__(cls, f"{user}/{name}")
 
     @property

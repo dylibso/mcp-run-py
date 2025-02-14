@@ -1,8 +1,9 @@
 from typing import Dict, Generic, TypeVar
 from datetime import datetime, timedelta
 
-K = TypeVar('K')  # Key type
-T = TypeVar('T')  # Value type
+K = TypeVar("K")  # Key type
+T = TypeVar("T")  # Value type
+
 
 class Cache(Generic[K, T]):
     """
