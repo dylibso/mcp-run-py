@@ -510,7 +510,8 @@ class Client:
                 if install_name not in visited:
                     self.install_cache.remove(install_name)
                     self.plugin_cache.remove(install_name)
-            self.install_cache.set_last_update()
+            if len(visited) > 0:
+                self.install_cache.set_last_update()
         return self.install_cache.items
 
     def uninstall(self, servlet: Servlet | str, profile: Profile | None = None):
