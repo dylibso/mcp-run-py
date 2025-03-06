@@ -47,6 +47,9 @@ class ProfileSlug(str):
             user = "~"
         return str.__new__(cls, f"{user}/{name}")
 
+    def __repr__(self):
+        return f"ProfileSlug('{self.user}', '{self.name}')"
+
     @property
     def user(self) -> str:
         """The username portion of the slug"""
