@@ -68,11 +68,6 @@ class TaskRun:
         return r
 
 
-class TaskRunner(StrEnum):
-    OPENAI = "openai"
-    ANTHROPIC = "anthropic"
-
-
 @dataclass
 class Task:
     """
@@ -94,14 +89,9 @@ class Task:
     Full task identifier
     """
 
-    runner: TaskRunner
+    provider: str
     """
     LLM provider for the task
-    """
-
-    model: str
-    """
-    LLM model
     """
 
     prompt: str

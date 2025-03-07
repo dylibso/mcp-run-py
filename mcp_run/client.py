@@ -10,7 +10,7 @@ import extism as ext
 from .api import Api
 from .types import Servlet, ServletSearchResult, CallResult, Tool, ProfileSlug
 from .profile import Profile
-from .task import TaskRunner, Task, TaskRun
+from .task import Task, TaskRun
 from .plugin import InstalledPlugin
 from .config import ClientConfig, _default_session_id
 from .cache import Cache
@@ -204,12 +204,9 @@ class Client:
     def create_task(
         self,
         task_name: str,
-        runner: TaskRunner,
-        model: str,
+        provider: str,
         prompt: str,
         *,
-        api_key: str | None = None,
-        settings: dict | None = None,
         profile: Profile | ProfileSlug | str | None = None,
     ) -> Task:
         """
@@ -217,12 +214,8 @@ class Client:
 
         Args:
             task_name: Name to identify this task
-            runner: The task runner to use (e.g. "openai", "anthropic")
-            model: Model name
+            provider: The mcp.run provider to use (e.g. "openai", "anthropic")
             prompt: The prompt text to send to the model
-            api_key: Optional API key for the runner service. If not provided,
-                    will attempt to load from environment variables.
-            settings: Optional dict of additional runner-specific settings
             profile: Optional profile to create task under. Defaults to current profile.
 
         Returns:
@@ -236,30 +229,18 @@ class Client:
             ```python
             task = client.create_task(
                 "summarize",
-                runner="openai",
-                model="gpt-4",
+                provider="openai",
                 prompt="Summarize this text: ...",
             )
             result = task.run()
             ```
         """
         profile = self._fix_profile(profile, user=True)
-        if api_key is None and runner.lower() == "openai":
-            api_key = os.environ.get("OPENAI_API_KEY")
-        elif api_key is None and runner.lower() == "anthropic":
-            api_key = os.environ.get("ANTHROPIC_API_KEY")
         url = self.api.create_task(profile, task_name)
         self.logger.info(f"Creating mcp.run task {url}")
-        settings = settings or {}
-        if "key" not in settings and api_key is not None:
-            settings["key"] = api_key
         data = {
-            "runner": runner,
-            runner: {
-                "prompt": prompt,
-                "model": model,
-            },
-            "settings": settings,
+            "provider": provider,
+            "prompt": prompt,
         }
         res = requests.put(url, cookies={"sessionId": self.session_id}, json=data)
         res.raise_for_status()
@@ -268,10 +249,9 @@ class Client:
             _client=self,
             name=data["name"],
             task_slug=data["slug"],
-            runner=data["runner"],
-            settings=data["settings"],
+            provider=data["provider"],
+            settings=data.get("settings", {}),
             prompt=prompt,
-            model=model,
             created_at=datetime.fromisoformat(data["created_at"]),
             modified_at=datetime.fromisoformat(data["modified_at"]),
         )
@@ -370,10 +350,9 @@ class Client:
                 _client=self,
                 name=t["name"],
                 task_slug=t["slug"],
-                runner=t["runner"],
+                provider=t["provider"],
                 settings=t.get("settings", {}),
-                prompt=t[t["runner"]]["prompt"],
-                model=t[t["runner"]]["model"],
+                prompt=t["prompt"],
                 created_at=datetime.fromisoformat(t["created_at"]),
                 modified_at=datetime.fromisoformat(t["modified_at"]),
             )
@@ -402,8 +381,7 @@ class Client:
                 task_slug=t["slug"],
                 runner=t["runner"],
                 settings=t.get("settings", {}),
-                prompt=t[t["runner"]]["prompt"],
-                model=t[t["runner"]]["model"],
+                prompt=t["prompt"],
                 created_at=datetime.fromisoformat(t["created_at"]),
                 modified_at=datetime.fromisoformat(t["modified_at"]),
             )
@@ -511,7 +489,7 @@ class Client:
         if self.install_cache.needs_refresh():
             self.logger.info("Cache expired, fetching installs")
             visited = set()
-            for install in self._list_installs(set_cache=True):
+            for install in self._list_installs(set_cache=False):
                 if install != self.install_cache.get(install.name):
                     self.install_cache.add(install.name, install)
                     self.plugin_cache.remove(install.name)
