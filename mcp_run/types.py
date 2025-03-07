@@ -39,8 +39,10 @@ class ProfileSlug(str):
         ProfileSlug.parse("myprof")   # -> ProfileSlug("~", "myprof")
     """
 
-    def __new__(cls, user: str, name: str) -> "ProfileSlug":
+    def __new__(cls, user: str, name: str = "") -> "ProfileSlug":
         """Create a new ProfileSlug"""
+        if name == "":
+            return ProfileSlug.parse(user)
         if not name:
             raise ValueError("Profile name cannot be empty")
         if user == "":
