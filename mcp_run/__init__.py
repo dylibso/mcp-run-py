@@ -1,5 +1,5 @@
 from .types import Tool, Servlet, ServletSearchResult, ProfileSlug
-from .task import Task, TaskRun, TaskRunner
+from .task import Task, TaskRun
 from .profile import Profile
 from .client import Client
 from .config import ClientConfig
@@ -16,6 +16,5 @@ __all__ = [
     "TaskRun",
     "Servlet",
     "ServletSearchResult",
-    "TaskRunner",
     "ProfileSlug",
 ]

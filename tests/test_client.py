@@ -29,7 +29,9 @@ class TestClient(unittest.TestCase):
     def test_list_installs(self):
         client = self.client()
         installs = list(client.list_installs())
+        print(installs)
         i = client.installs.values()
+        print(list(i))
         self.assertEqual(len(installs), len(i))
         for v in i:
             self.assertTrue(v.name != "")
@@ -70,8 +72,7 @@ class TestClient(unittest.TestCase):
 
         my_task = client.create_task(
             "python-test-task",
-            runner="anthropic",
-            model="claude-3-5-sonnet-latest",
+            provider="zshipko/openai_1",
             prompt="write a greeting for {{ name }}",
         )
 
