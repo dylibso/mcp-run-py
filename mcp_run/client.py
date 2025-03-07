@@ -126,7 +126,6 @@ class Client:
         session_id: str | None = None,
         config: ClientConfig | None = None,
         log_level: int | None = None,
-        /,
         *args,
         **kw,
     ):

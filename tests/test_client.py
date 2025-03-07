@@ -1,4 +1,4 @@
-from mcp_run import Client, ProfileSlug
+from mcp_run import Client, ClientConfig, ProfileSlug
 
 import unittest
 import os
@@ -21,9 +21,10 @@ class TestProfileSlug(unittest.TestCase):
 class TestClient(unittest.TestCase):
     def client(self):
         try:
-            client = Client()
+            client = Client(config=ClientConfig())
             return client
-        except Exception:
+        except Exception as exc:
+            print(exc)
             self.skipTest("No client")
 
     def test_list_installs(self):
