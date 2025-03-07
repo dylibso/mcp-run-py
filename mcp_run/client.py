@@ -13,7 +13,6 @@ from .profile import Profile
 from .task import Task, TaskRun
 from .plugin import InstalledPlugin
 from .config import ClientConfig, _default_session_id
-from .cache import Cache
 
 
 @dataclass
@@ -105,12 +104,12 @@ class Client:
     mcp.run api endpoints
     """
 
-    install_cache: Cache[str, Servlet]
+    install_cache: Dict[str, Servlet]
     """
     Cache of Installs
     """
 
-    plugin_cache: Cache[str, InstalledPlugin]
+    plugin_cache: Dict[str, InstalledPlugin]
     """
     Cache of InstalledPlugins
     """
@@ -127,15 +126,18 @@ class Client:
         session_id: str | None = None,
         config: ClientConfig | None = None,
         log_level: int | None = None,
+        /,
+        *args,
+        **kw,
     ):
         if session_id is None:
             session_id = _default_session_id()
         if config is None:
-            config = ClientConfig()
+            config = ClientConfig(*args, **kw)
         self.session_id = session_id
         self.api = Api(config.base_url)
-        self.install_cache = Cache(config.tool_refresh_time)
-        self.plugin_cache = Cache()
+        self.install_cache = {}
+        self.plugin_cache = {}
         self.logger = config.logger
         self.config = config
         self._user = None
@@ -166,8 +168,8 @@ class Client:
 
     def clear_cache(self):
         self.last_installations_request = {}
-        self.install_cache.clear()
-        self.plugin_cache.clear()
+        self.install_cache = {}
+        self.plugin_cache = {}
 
     @property
     def user(self) -> User:
@@ -417,15 +419,8 @@ class Client:
         return p
 
     def list_installs(
-        self, profile: str | Profile | ProfileSlug | None = None
-    ) -> Iterator[Servlet]:
-        for x in self._list_installs(profile, set_cache=False):
-            yield x
-
-    def _list_installs(
         self,
         profile: str | Profile | ProfileSlug | None = None,
-        set_cache: bool = False,
     ) -> Iterator[Servlet]:
         """
         List all installed servlets, this will make an HTTP
@@ -435,8 +430,9 @@ class Client:
         url = self.api.installations(profile)
         self.logger.info(f"Listing installed mcp.run servlets from {url}")
         headers = {}
-        if set_cache and self.last_installations_request.get(profile) is not None:
-            headers["if-modified-since"] = self.last_installations_request[profile]
+        last = self.last_installations_request.get(profile)
+        if last is not None:
+            headers["if-modified-since"] = last
         res = requests.get(
             url,
             headers=headers,
@@ -446,16 +442,13 @@ class Client:
         )
         res.raise_for_status()
         if res.status_code == 301:
-            self.logger.debug(
-                f"No changes since {self.last_installations_request[profile]}"
-            )
-            for v in self.install_cache.items.values():
+            self.logger.debug(f"No changes since {last}")
+            for v in self.install_cache.values():
                 yield v
             return
-        if set_cache:
-            self.last_installations_request[profile] = res.headers.get("Date")
         data = res.json()
         self.logger.debug(f"Got installed servlets from {url}: {data}")
+        self.last_installations_request[profile] = res.headers.get("Date")
         for install in data["installs"]:
             binding = install["binding"]
             tools = install["servlet"]["meta"]["schema"]
@@ -478,6 +471,9 @@ class Client:
                     input_schema=tool["inputSchema"],
                     servlet=install,
                 )
+            self.install_cache[install.name] = install
+            if install.name in self.plugin_cache:
+                del self.plugin_cache[install.name]
             yield install
 
     @property
@@ -486,21 +482,9 @@ class Client:
         Get all installed servlets, this will returned cached Installs if
         the cache timeout hasn't been reached
         """
-        if self.install_cache.needs_refresh():
-            self.logger.info("Cache expired, fetching installs")
-            visited = set()
-            for install in self._list_installs(set_cache=False):
-                if install != self.install_cache.get(install.name):
-                    self.install_cache.add(install.name, install)
-                    self.plugin_cache.remove(install.name)
-                visited.add(install.name)
-            for install_name in self.install_cache.items:
-                if install_name not in visited:
-                    self.install_cache.remove(install_name)
-                    self.plugin_cache.remove(install_name)
-            if len(visited) > 0:
-                self.install_cache.set_last_update()
-        return self.install_cache.items
+        for install in self.list_installs():
+            continue
+        return self.install_cache
 
     def uninstall(self, servlet: Servlet | str, profile: Profile | None = None):
         """
@@ -611,7 +595,8 @@ class Client:
     def plugin(
         self,
         install: Servlet,
-        wasi: bool = True,
+        cache: bool = True,
+        wasi: bool | None = None,
         functions: List[ext.Function] | None = None,
         wasm: List[Dict[str, bytes]] | None = None,
     ) -> InstalledPlugin:
@@ -627,15 +612,12 @@ class Client:
         Returns:
             An InstalledPlugin instance
         """
-        cache_name = f"{install.name}-{wasi}"
-        if functions is not None:
-            for func in functions:
-                cache_name += "-"
-                cache_name += str(hash(func.pointer))
-        cache_name = str(hash(cache_name))
-        cached = self.plugin_cache.get(cache_name)
+        cached = None
+        if cache and wasi is None and functions is None and wasm is None:
+            cached = self.plugin_cache.get(install.name)
         if cached is not None:
             return cached
+        wasi = wasi or True
         if install.content is None:
             self.logger.info(
                 f"Fetching servlet Wasm for {install.name}: {install.content_addr}"
@@ -662,7 +644,7 @@ class Client:
         p = InstalledPlugin(
             install, ext.Plugin(manifest, wasi=wasi, functions=functions)
         )
-        self.plugin_cache.add(install.name, p)
+        self.plugin_cache[install.name] = p
         return p
 
     def call_tool(
