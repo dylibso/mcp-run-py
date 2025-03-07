@@ -29,9 +29,9 @@ class TestClient(unittest.TestCase):
     def test_list_installs(self):
         client = self.client()
         installs = list(client.list_installs())
-        print(installs)
+        # print(installs)
         i = client.installs.values()
-        print(list(i))
+        # print(list(i))
         self.assertEqual(len(installs), len(i))
         for v in i:
             self.assertTrue(v.name != "")
@@ -48,6 +48,9 @@ class TestClient(unittest.TestCase):
 
     def test_call(self):
         client = self.client()
+        results = client.call_tool("eval-js", params={"code": "'Hello, world!'"})
+        for content in results.content:
+            self.assertEqual(content.text, "Hello, world!")
         results = client.call_tool("eval-js", params={"code": "'Hello, world!'"})
         for content in results.content:
             self.assertEqual(content.text, "Hello, world!")
