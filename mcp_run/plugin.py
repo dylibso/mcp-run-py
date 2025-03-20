@@ -2,16 +2,19 @@ import base64
 import json
 import extism as ext
 
+from datetime import datetime
 from .types import Servlet, Content, CallResult
 
 
 class InstalledPlugin:
     _install: Servlet
     _plugin: ext.Plugin
+    _timestamp: datetime
 
     def __init__(self, install, plugin):
         self._install = install
         self._plugin = plugin
+        self._timestamp = datetime.now()
 
     def call(self, tool: str | None = None, input: dict = {}) -> CallResult:
         """
