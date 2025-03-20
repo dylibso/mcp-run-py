@@ -25,6 +25,10 @@ class Api:
     def current_user(self):
         return f"{self.base}/api/users/~"
 
+    def oauth(self, profile: ProfileSlug, installation: str):
+        profile = fix_profile(profile)
+        return f"{self.base}/api/profiles/{profile}/installations/{installation}/oauth"
+
     def installations(self, profile: ProfileSlug):
         """
         List installations
