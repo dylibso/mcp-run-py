@@ -1,6 +1,6 @@
 from dataclasses import dataclass
 from typing import Iterator, Dict, List
-from datetime import datetime
+from datetime import datetime, timedelta
 import logging
 
 import requests
@@ -622,18 +622,22 @@ class Client:
             oauth = res.json()["oauth_info"]
         else:
             oauth = None
-        cache_ok = (
-            oauth is None
-            and cache
-            and wasi is None
-            and functions is None
-            and wasm is None
-        )
-        if cache_ok:
-            cached = self.plugin_cache.get(install.name)
-            if cached is not None:
-                return cached
         wasi = wasi or True
+        cache_ok = cache and wasi and functions is None and wasm is None
+        if cache_ok:
+            cached: InstalledPlugin | None = self.plugin_cache.get(install.name)
+            if cached is not None:
+                if (
+                    cached._timestamp + timedelta(minutes=4, seconds=30)
+                    > datetime.now()
+                ):
+                    self.logger.info(f"Found cached {install.name} instance")
+                    return cached
+                else:
+                    self.logger.info(
+                        f"Found cached {install.name}, but oauth token update is needed"
+                    )
+                    del self.plugin_cache[install.name]
         if install.content is None:
             self.logger.info(
                 f"Fetching servlet Wasm for {install.name}: {install.content_addr}"

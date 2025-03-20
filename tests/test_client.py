@@ -59,6 +59,10 @@ class TestClient(unittest.TestCase):
         results = client.call_tool("gh-get-repo-contributors", params={"owner": "dylibso", "repo": "mcp-run-py"})
         for content in results.content:
             self.assertGreaterEqual(len(content.json), 1)
+        results = client.call_tool("gh-get-repo-contributors", params={"owner": "dylibso", "repo": "mcp-run-py"})
+        for content in results.content:
+            self.assertGreaterEqual(len(content.json), 1)
+
 
     def test_profile_install_uninstall(self):
         client = self.client()
