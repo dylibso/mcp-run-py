@@ -1,5 +1,4 @@
 from dataclasses import dataclass
-import os
 from typing import Iterator, Dict, List
 from datetime import datetime
 import logging
@@ -152,7 +151,7 @@ class Client:
                 self.user.username
             )
         if profile is None:
-            return self.config.profile
+            return self.config.profile or ProfileSlug("~", "default")
         elif isinstance(profile, Profile):
             return profile.slug
         elif isinstance(profile, str):
@@ -462,6 +461,7 @@ class Client:
                 slug=ProfileSlug.parse(install["servlet"]["slug"]),
                 settings=install["settings"],
                 tools={},
+                has_oauth=install["servlet"]["has_client"],
             )
             for tool in tools:
                 install.tools[tool["name"]] = Tool(
@@ -611,11 +611,28 @@ class Client:
         Returns:
             An InstalledPlugin instance
         """
-        cached = None
-        if cache and wasi is None and functions is None and wasm is None:
+        if install.has_oauth:
+            res = requests.get(
+                self.api.oauth(self.config.profile, install.name),
+                cookies={
+                    "sessionId": self.session_id,
+                },
+            )
+            res.raise_for_status()
+            oauth = res.json()["oauth_info"]
+        else:
+            oauth = None
+        cache_ok = (
+            oauth is None
+            and cache
+            and wasi is None
+            and functions is None
+            and wasm is None
+        )
+        if cache_ok:
             cached = self.plugin_cache.get(install.name)
-        if cached is not None:
-            return cached
+            if cached is not None:
+                return cached
         wasi = wasi or True
         if install.content is None:
             self.logger.info(
@@ -638,12 +655,17 @@ class Client:
             "allowed_hosts": perm["network"].get("domains", []),
             "config": install.settings.get("config", {}),
         }
+
+        if oauth is not None:
+            manifest["config"][oauth["config_name"]] = oauth["access_token"]
+
         if functions is None:
             functions = []
         p = InstalledPlugin(
             install, ext.Plugin(manifest, wasi=wasi, functions=functions)
         )
-        self.plugin_cache[install.name] = p
+        if cache_ok:
+            self.plugin_cache[install.name] = p
         return p
 
     def call_tool(

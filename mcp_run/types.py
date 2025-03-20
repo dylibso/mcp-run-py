@@ -163,6 +163,8 @@ class Servlet:
     Cached WASM module data
     """
 
+    has_oauth: bool = False
+
     def __eq__(self, other):
         if other is None:
             return False
@@ -173,6 +175,7 @@ class Servlet:
             and self.binding_id == other.binding_id
             and self.slug == other.slug
             and self.name == other.name
+            and self.has_oauth == other.has_oauth
         )
 
 

@@ -21,7 +21,7 @@ class TestProfileSlug(unittest.TestCase):
 class TestClient(unittest.TestCase):
     def client(self):
         try:
-            client = Client(config=ClientConfig())
+            client = Client(profile=ProfileSlug("~", "default"))
             return client
         except Exception as exc:
             print(exc)
@@ -40,7 +40,7 @@ class TestClient(unittest.TestCase):
     def test_search(self):
         client = self.client()
         res = list(client.search("fetch"))
-        self.assertEqual(res[0].slug, "bhelx/fetch")
+        self.assertEqual(res[0].slug, "dylibso/fetch")
 
     def test_list_profiles(self):
         client = self.client()
@@ -49,12 +49,16 @@ class TestClient(unittest.TestCase):
 
     def test_call(self):
         client = self.client()
+        # print(list(client.tools.keys()))
         results = client.call_tool("eval-js", params={"code": "'Hello, world!'"})
         for content in results.content:
             self.assertEqual(content.text, "Hello, world!")
         results = client.call_tool("eval-js", params={"code": "'Hello, world!'"})
         for content in results.content:
             self.assertEqual(content.text, "Hello, world!")
+        results = client.call_tool("gh-get-repo-contributors", params={"owner": "dylibso", "repo": "mcp-run-py"})
+        for content in results.content:
+            self.assertGreaterEqual(len(content.json), 1)
 
     def test_profile_install_uninstall(self):
         client = self.client()
@@ -70,9 +74,6 @@ class TestClient(unittest.TestCase):
 
     def test_tasks(self):
         client = self.client()
-
-        if "ANTHROPIC_API_KEY" not in os.environ:
-            self.skipTest("No Anthropic API key")
 
         my_task = client.create_task(
             "python-test-task",
@@ -91,6 +92,13 @@ class TestClient(unittest.TestCase):
         # Run it again
         task_run = my_task.run({"name": "Bob"})
         self.assertIn("Bob", task_run.results())
+
+        
+    def test_tasks(self):
+        client = self.client()
+
+        for task in client.tasks:
+            print(task)
 
 
 if __name__ == "__main__":
