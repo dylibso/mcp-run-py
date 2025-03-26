@@ -4,7 +4,7 @@ from .profile import Profile
 from .client import Client
 from .config import ClientConfig
 from .plugin import InstalledPlugin
-from .mcp_protocol import mcp_server
+from .mcp_protocol import MCPServer, convert_tool
 
 __all__ = [
     "Tool",
@@ -18,5 +18,6 @@ __all__ = [
     "Servlet",
     "ServletSearchResult",
     "ProfileSlug",
-    "mcp_server",
+    "MCPServer",
+    "convert_tool",
 ]
