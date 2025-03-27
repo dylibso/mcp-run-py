@@ -1,6 +1,6 @@
 [project]
 name = "mcp-run"
-version = "0.3.1"
+version = "0.3.2"
 description = "A Python client for mcp.run"
 readme = "README.md"
 requires-python = ">=3.12"

@@ -113,7 +113,7 @@ class Client:
     Cache of InstalledPlugins
     """
 
-    last_installations_request: Dict[str, str] = {}
+    last_installations_request: Dict[str, str]
     """
     Date header from last installations request
     """
@@ -139,6 +139,7 @@ class Client:
         self.logger = config.logger
         self.config = config
         self._user = None
+        self.last_installations_request = {}
 
         if log_level is not None:
             self.configure_logging(level=log_level)
@@ -675,7 +676,7 @@ class Client:
     def call_tool(
         self,
         tool: str | Tool,
-        params: dict = {},
+        params: dict | None = None,
         *,
         wasi: bool = True,
         functions: List[ext.Function] | None = None,
@@ -721,7 +722,7 @@ class Client:
                 raise ValueError(f"Tool '{tool}' not found")
             tool = found_tool
         plugin = self.plugin(tool.servlet, wasi=wasi, functions=functions, wasm=wasm)
-        return plugin.call(tool=tool.name, input=params)
+        return plugin.call(tool=tool.name, input=params or {})
 
     def delete_profile(self, profile: str | Profile | ProfileSlug):
         """
