@@ -1,4 +1,4 @@
-from typing import TypedDict
+from typing import TypedDict, Any
 import traceback
 
 from mcp.server.fastmcp import FastMCP
@@ -45,6 +45,14 @@ class MCPServer(FastMCP):
         self.client = client or Client()
         super().__init__(**kw)
         self.update_tools()
+
+    async def list_tools(self) -> list:
+        self.update_tools()
+        return super().list_tools()
+
+    async def call_tool(self, name: str, arguments: dict[str, Any]):
+        self.update_tools()
+        return super().call_tool(name, arguments)
 
     def update_tools(self):
         for t in self.client.tools.values():
