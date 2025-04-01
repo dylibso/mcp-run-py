@@ -1,7 +1,8 @@
 from dataclasses import dataclass
-from typing import Iterator, Dict, List
+from typing import Iterator, Dict, List, TypedDict
 from datetime import datetime, timedelta
 import logging
+import traceback
 
 import requests
 import extism as ext
@@ -52,6 +53,22 @@ class User:
     def verified_emails(self) -> List[UserEmail]:
         """Get all verified email addresses for this user."""
         return [e for e in self.emails if e.verified]
+
+
+def _convert_type(t):
+    if t == "string":
+        return str
+    elif t == "boolean":
+        return bool
+    elif t == "number":
+        return float
+    elif t == "integer":
+        return int
+    elif t == "object":
+        return dict
+    elif t == "array":
+        return list
+    raise TypeError(f"Unhandled conversion type: {t}")
 
 
 class Client:
@@ -158,6 +175,20 @@ class Client:
         elif isinstance(profile, str):
             return ProfileSlug.parse(profile)
         return profile
+
+    def _make_pydantic_function(self, tool: Tool):
+        props = tool.input_schema["properties"]
+        t = {k: _convert_type(v["type"]) for k, v in props.items()}
+        InputType = TypedDict("Input", t)
+
+        def f(input: InputType):
+            try:
+                res = self.call_tool(tool=tool.name, params=input)
+                return res.content[0].text
+            except Exception as exc:
+                return f"ERROR call to tool {tool.name} failed: {traceback.format_exception(exc)}"
+
+        return f
 
     def configure_logging(self, *args, **kw):
         """
