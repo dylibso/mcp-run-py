@@ -48,11 +48,11 @@ class MCPServer(FastMCP):
 
     async def list_tools(self) -> list:
         self.update_tools()
-        return super().list_tools()
+        return await super().list_tools()
 
     async def call_tool(self, name: str, arguments: dict[str, Any]):
-        self.update_tools()
-        return super().call_tool(name, arguments)
+        # self.update_tools()
+        return await super().call_tool(name, arguments)
 
     def update_tools(self):
         for t in self.client.tools.values():
