@@ -11,8 +11,10 @@ if TYPE_CHECKING:
 
 import requests
 
+
 class TaskRunError(Exception):
     pass
+
 
 @dataclass
 class TaskRun:
@@ -90,7 +92,7 @@ class Task:
     Full task identifier
     """
 
-    provider: str
+    provider: dict
     """
     LLM provider for the task
     """
