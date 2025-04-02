@@ -2,7 +2,6 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import List, TYPE_CHECKING, Iterator
 from datetime import datetime, timedelta
-from enum import StrEnum
 from time import sleep
 
 from .types import ProfileSlug
@@ -12,6 +11,8 @@ if TYPE_CHECKING:
 
 import requests
 
+class TaskRunError(Exception):
+    pass
 
 @dataclass
 class TaskRun:
@@ -26,14 +27,14 @@ class TaskRun:
     results_list: List[object]
     created_at: datetime
     modified_at: datetime
-    url: str | None
+    url: str | None = None
 
     def wait(
         self, interval=timedelta(milliseconds=250), timeout: timedelta | None = None
     ):
         start = datetime.now()
         if self.url is None:
-            raise Exception("No task URL set")
+            raise TaskRunError("No task URL set")
         done = False
         while not done:
             res = requests.get(
