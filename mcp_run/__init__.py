@@ -1,5 +1,5 @@
-from .types import Tool, Servlet, ServletSearchResult, ProfileSlug
-from .task import Task, TaskRun
+from .types import Tool, Servlet, ServletSearchResult, ProfileSlug, MCPRunError
+from .task import Task, TaskRun, TaskRunError
 from .profile import Profile
 from .client import Client
 from .config import ClientConfig
@@ -19,4 +19,6 @@ __all__ = [
     "ServletSearchResult",
     "ProfileSlug",
     "MCPServer",
+    "TaskRunError",
+    "MCPRunError"
 ]

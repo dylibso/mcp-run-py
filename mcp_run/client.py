@@ -399,27 +399,26 @@ class Client:
         List all tasks runs associated with the configured profile
         """
         profile = self._fix_profile(profile, user=True)
-        if isinstance(task, Task):
-            task = task.name
-        url = self.api.task_runs(profile, task)
+        if isinstance(task, str):
+            task = self.tasks[task]
+        url = self.api.task_runs(profile, task.name)
         self.logger.info(f"Listing mcp.run task runs from {url}")
         res = requests.get(url, cookies={"sessionId": self.session_id})
         res.raise_for_status()
         data = res.json()
         for t in data:
-            task = Task(
+            run = TaskRun(
                 _client=self,
+                _task=task,
                 name=t["name"],
-                task_slug=t["slug"],
-                runner=t["runner"],
-                settings=t.get("settings", {}),
-                prompt=t["prompt"],
+                status=t["status"],
+                results_list=t["results"],
                 created_at=datetime.fromisoformat(t["created_at"]),
                 modified_at=datetime.fromisoformat(t["modified_at"]),
             )
-            if task.profile != self.config.profile:
+            if run._task.profile != profile:
                 continue
-            yield task
+            yield run
 
     @property
     def tasks(self) -> Dict[str, Task]:
