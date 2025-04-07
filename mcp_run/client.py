@@ -186,7 +186,8 @@ class Client:
                 res = self.call_tool(tool=tool.name, params=input)
                 out = ""
                 for t in res.content:
-                    out += t + "\n"
+                    out += t
+                    out += "\n"
                 return out
             except Exception as exc:
                 return f"ERROR call to tool {tool.name} failed: {traceback.format_exception(exc)}"
