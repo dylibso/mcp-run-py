@@ -186,7 +186,10 @@ class Client:
                 res = self.call_tool(tool=tool.name, params=input)
                 out = ""
                 for t in res.content:
-                    out += t
+                    if hasattr(t, "text"):
+                        out += t.text
+                    else:
+                        out += json.dumps(t)
                     out += "\n"
                 return out
             except Exception as exc:
