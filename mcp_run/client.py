@@ -3,6 +3,7 @@ from typing import Iterator, Dict, List, TypedDict
 from datetime import datetime, timedelta
 import logging
 import traceback
+import json
 
 import requests
 import extism as ext
