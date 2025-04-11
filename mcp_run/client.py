@@ -184,7 +184,11 @@ class Client:
         def f(input: InputType):
             try:
                 res = self.call_tool(tool=tool.name, params=input)
-                return res.content[0].text
+                out = ""
+                for t in res.content:
+                    out += t
+                    out += "\n"
+                return out
             except Exception as exc:
                 return f"ERROR call to tool {tool.name} failed: {traceback.format_exception(exc)}"
 
