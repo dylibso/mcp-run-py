@@ -4,7 +4,7 @@ from .profile import Profile
 from .client import Client
 from .config import ClientConfig
 from .plugin import InstalledPlugin
-from .mcp_protocol import MCPServer
+from .mcp_protocol import MCPServer, MCPClient, MCPClientConfig
 
 __all__ = [
     "Tool",
@@ -19,6 +19,8 @@ __all__ = [
     "ServletSearchResult",
     "ProfileSlug",
     "MCPServer",
+    "MCPClient",
+    "MCPClientConfig",
     "TaskRunError",
-    "MCPRunError"
+    "MCPRunError",
 ]
