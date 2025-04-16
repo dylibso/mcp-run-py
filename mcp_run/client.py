@@ -170,12 +170,12 @@ class Client:
                 self.user.username
             )
         if profile is None:
-            return self.config.profile or ProfileSlug("~", "default")
+            return ProfileSlug.parse(self.config.profile) or ProfileSlug("~", "default")
         elif isinstance(profile, Profile):
-            return profile.slug
+            return ProfileSlug.parse(profile.slug)
         elif isinstance(profile, str):
             return ProfileSlug.parse(profile)
-        return profile
+        return ProfileSlug.parse(profile)
 
     def _make_pydantic_function(self, tool: Tool):
         props = tool.input_schema["properties"]
