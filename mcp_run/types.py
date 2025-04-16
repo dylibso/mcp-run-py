@@ -12,16 +12,6 @@ class MCPRunError(Exception):
     pass
 
 
-class InvalidUserError(MCPRunError):
-    """Raised when attempting to access or modify a profile belonging to another user"""
-
-    def __init__(self, user: str):
-        self.user = user
-        super().__init__(
-            f"Cannot access profile for user '{user}' - only '~' (self) is allowed"
-        )
-
-
 class ProfileSlug(str):
     """
     A profile identifier consisting of a username and profile name separated by a slash.
@@ -82,13 +72,10 @@ class ProfileSlug(str):
     def _current_user(self, user: str) -> "ProfileSlug":
         """
         Convert this slug to reference the current user if possible.
-
-        Raises:
-            InvalidUserError: If the slug references another user's profile
         """
         if self.user == "~" or self.user == user:
             return ProfileSlug("~", self.name)
-        raise InvalidUserError(self.user)
+        return ProfileSlug(user, self.name)
 
 
 @dataclass
