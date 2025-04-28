@@ -478,7 +478,7 @@ class Client:
             },
         )
         res.raise_for_status()
-        if res.status_code == 301:
+        if res.status_code == 301 or res.status_code == 304:
             self.logger.debug(f"No changes since {last}")
             for v in self.install_cache.values():
                 yield v
