@@ -51,7 +51,7 @@ class Api:
         """
         List tasks
         """
-        return f"{self.base}/api/users/~/tasks"
+        return f"{self.base}/api/tasks/~"
 
     def create_task(self, profile: ProfileSlug, task: str):
         """
