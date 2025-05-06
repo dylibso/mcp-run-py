@@ -185,7 +185,7 @@ class Client:
         # headers["Authorization"] = f"Bearer {self.session_id}"
         headers["Content-Type"] = "application/json"
         headers["Accept"] = "text/event-stream"
-        headers["Cookie"] = f"sessionId={self.session_id}"
+        headers["Cookie"] = f"sessionId={self.session_id.split('/')[-1]}"
         return headers
 
     def _make_pydantic_function(self, tool: Tool):
