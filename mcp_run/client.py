@@ -185,7 +185,8 @@ class Client:
         if not tool.is_remote:
             return headers
 
-        headers["Authorization"] = f"Bearer {self.session_id.split('/')[-1]}"
+        headers["Authorization"] = f"Bearer {self.session_id}"
+        headers["Accept"] = "application/json, text/event-stream"
         return headers
 
     def _make_pydantic_function(self, tool: Tool):
