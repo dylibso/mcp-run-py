@@ -109,6 +109,11 @@ class Tool:
     Remote MCP URL
     """
 
+    auth: Optional[str] = None
+    """
+    Remote MCP Auth
+    """
+
     def __str__(self) -> str:
         """Return a human-readable representation of the tool"""
         return f"{self.servlet.name}.{self.name}" if self.servlet else self.name
@@ -119,6 +124,17 @@ class Tool:
         Returns True when the Tool represents a remote servlet
         """
         return self.url is not None
+
+    def headers(self, client) -> dict:
+        """
+        Returns MCP server headers
+        """
+        headers = {}
+        if not self.is_remote:
+            return headers
+
+        headers["Authorization"] = f"Bearer: {client.session_id}"
+        return headers
 
 
 @dataclass
