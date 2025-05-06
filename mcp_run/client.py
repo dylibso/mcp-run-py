@@ -177,6 +177,18 @@ class Client:
             return ProfileSlug.parse(profile)
         return ProfileSlug.parse(profile)
 
+    def _mcp_headers(self, tool: Tool) -> dict:
+        """
+        Returns MCP server headers
+        """
+        headers = {}
+        if not self.is_remote:
+            return headers
+
+        headers["Authorization"] = f"Bearer {self.session_id}"
+        self.logger.info("AAAAA MCP HEADERS:" + str(headers))
+        return headers
+
     def _make_pydantic_function(self, tool: Tool):
         props = tool.input_schema["properties"]
         t = {k: _convert_type(v["type"]) for k, v in props.items()}

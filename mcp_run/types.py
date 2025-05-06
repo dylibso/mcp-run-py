@@ -125,17 +125,6 @@ class Tool:
         """
         return self.url is not None
 
-    def headers(self, client) -> dict:
-        """
-        Returns MCP server headers
-        """
-        headers = {}
-        if not self.is_remote:
-            return headers
-
-        headers["Authorization"] = f"Bearer {client.session_id}"
-        return headers
-
 
 @dataclass
 class Servlet:
