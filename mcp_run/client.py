@@ -184,6 +184,7 @@ class Client:
         headers = {}
         # headers["Authorization"] = f"Bearer {self.session_id}"
         headers["Content-Type"] = "application/json"
+        headers["Accept"] = "text/event-stream"
         headers["Cookie"] = f"sessionId={self.session_id}"
         return headers
 
