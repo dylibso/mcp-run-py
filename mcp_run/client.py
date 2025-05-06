@@ -509,12 +509,12 @@ class Client:
             )
             for tool in tools:
                 if "remote" in tool:
-                    install.tools[tool["url"]] = Tool(
-                        name=tool["url"],
+                    install.tools[tool["remote"]["url"]] = Tool(
+                        name=tool["remote"]["url"],
                         description=tool["description"],
                         input_schema={},
                         servlet=install,
-                        url=tool["url"],
+                        url=tool["remote"]["url"],
                     )
                 else:
                     install.tools[tool["name"]] = Tool(
