@@ -488,6 +488,7 @@ class Client:
         self.last_installations_request[profile] = res.headers.get("Date")
         for install in data["installs"]:
             binding = install["binding"]
+            print(binding)
             if "schema" in install["servlet"]["meta"]:
                 tools = install["servlet"]["meta"]["schema"]
                 if "tools" in tools:
