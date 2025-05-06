@@ -133,7 +133,7 @@ class Tool:
         if not self.is_remote:
             return headers
 
-        headers["Authorization"] = f"Bearer: {client.session_id}"
+        headers["Authorization"] = f"Bearer {client.session_id}"
         return headers
 
 

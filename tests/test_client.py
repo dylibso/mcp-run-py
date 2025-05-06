@@ -30,9 +30,7 @@ class TestClient(unittest.TestCase):
     def test_list_installs(self):
         client = self.client()
         installs = list(client.list_installs())
-        # print(installs)
         i = client.installs.values()
-        # print(list(i))
         self.assertEqual(len(installs), len(i))
         for v in i:
             self.assertTrue(v.name != "")
@@ -56,13 +54,18 @@ class TestClient(unittest.TestCase):
         results = client.call_tool("eval-js", params={"code": "'Hello, world!'"})
         for content in results.content:
             self.assertEqual(content.text, "Hello, world!")
-        results = client.call_tool("gh-get-repo-contributors", params={"owner": "dylibso", "repo": "mcp-run-py"})
+        results = client.call_tool(
+            "gh-get-repo-contributors",
+            params={"owner": "dylibso", "repo": "mcp-run-py"},
+        )
         for content in results.content:
             self.assertGreaterEqual(len(content.json), 1)
-        results = client.call_tool("gh-get-repo-contributors", params={"owner": "dylibso", "repo": "mcp-run-py"})
+        results = client.call_tool(
+            "gh-get-repo-contributors",
+            params={"owner": "dylibso", "repo": "mcp-run-py"},
+        )
         for content in results.content:
             self.assertGreaterEqual(len(content.json), 1)
-
 
     def test_profile_install_uninstall(self):
         client = self.client()
@@ -97,7 +100,6 @@ class TestClient(unittest.TestCase):
         task_run = my_task.run({"name": "Bob"})
         self.assertIn("Bob", task_run.results())
 
-        
     def test_tasks(self):
         client = self.client()
 
