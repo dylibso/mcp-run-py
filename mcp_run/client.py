@@ -185,8 +185,7 @@ class Client:
         if not tool.is_remote:
             return headers
 
-        headers["Authorization"] = f"Bearer {self.session_id}"
-        self.logger.info("AAAAA MCP HEADERS:" + str(headers))
+        headers["Authorization"] = f"Bearer {self.session_id.split('/')[-1]}"
         return headers
 
     def _make_pydantic_function(self, tool: Tool):
