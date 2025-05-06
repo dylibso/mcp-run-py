@@ -497,7 +497,6 @@ class Client:
             elif "remote" in install["servlet"]["meta"]:
                 remote = install["servlet"]["meta"]
                 tools = [remote]
-            print(install)
             install = Servlet(
                 binding_id=binding.get("id"),
                 content_addr=binding.get("contentAddress"),
