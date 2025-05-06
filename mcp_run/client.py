@@ -182,7 +182,7 @@ class Client:
         Returns MCP server headers
         """
         headers = {}
-        if not self.is_remote:
+        if not tool.is_remote:
             return headers
 
         headers["Authorization"] = f"Bearer {self.session_id}"
