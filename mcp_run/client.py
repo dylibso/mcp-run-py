@@ -488,7 +488,6 @@ class Client:
         self.last_installations_request[profile] = res.headers.get("Date")
         for install in data["installs"]:
             binding = install["binding"]
-            print(binding)
             if "schema" in install["servlet"]["meta"]:
                 tools = install["servlet"]["meta"]["schema"]
                 if "tools" in tools:
@@ -498,13 +497,13 @@ class Client:
             elif "remote" in install["servlet"]["meta"]:
                 remote = install["servlet"]["meta"]
                 tools = [remote]
-
+            print(install)
             install = Servlet(
-                binding_id=binding["id"],
-                content_addr=binding["contentAddress"],
+                binding_id=binding.get("id"),
+                content_addr=binding.get("contentAddress"),
                 name=install.get("name", ""),
                 slug=ProfileSlug.parse(install["servlet"]["slug"]),
-                settings=install["settings"],
+                settings=install.get("settings", {}),
                 tools={},
                 has_oauth=install["servlet"]["has_client"],
             )

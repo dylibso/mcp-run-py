@@ -137,12 +137,12 @@ class Servlet:
     Servlet slug
     """
 
-    binding_id: str
+    binding_id: str | None
     """
     Servlet binding ID
     """
 
-    content_addr: str
+    content_addr: str | None
     """
     Content address for WASM module
     """
