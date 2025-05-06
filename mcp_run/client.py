@@ -177,16 +177,12 @@ class Client:
             return ProfileSlug.parse(profile)
         return ProfileSlug.parse(profile)
 
-    def _mcp_headers(self, tool: Tool) -> dict:
+    def _mcp_headers(self) -> dict:
         """
         Returns MCP server headers
         """
         headers = {}
-        if not tool.is_remote:
-            return headers
-
         # headers["Authorization"] = f"Bearer {self.session_id}"
-        headers["Accept"] = "application/json, text/event-stream"
         headers["Content-Type"] = "application/json"
         headers["Cookie"] = f"sessionId={self.session_id}"
         return headers
