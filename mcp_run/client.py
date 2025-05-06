@@ -182,11 +182,10 @@ class Client:
         Returns MCP server headers
         """
         headers = {}
-        headers["Authorization"] = f"Bearer {self.session_id.split('/')[-1]}"
+        headers["Authorization"] = f"Bearer {self.session_id}"
         headers["Content-Type"] = "application/json"
         headers["Accept"] = "text/event-stream"
-        headers["Cookie"] = f"sessionId={self.session_id.split('/')[-1]}"
-        print("AAA", headers)
+        headers["Cookie"] = f"sessionId={self.session_id}"
         return headers
 
     def _make_pydantic_function(self, tool: Tool):
