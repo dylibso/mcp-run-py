@@ -488,11 +488,16 @@ class Client:
         self.last_installations_request[profile] = res.headers.get("Date")
         for install in data["installs"]:
             binding = install["binding"]
-            tools = install["servlet"]["meta"]["schema"]
-            if "tools" in tools:
-                tools = tools["tools"]
-            else:
-                tools = [tools]
+            if "schema" in install["servlet"]["meta"]:
+                tools = install["servlet"]["meta"]["schema"]
+                if "tools" in tools:
+                    tools = tools["tools"]
+                else:
+                    tools = [tools]
+            elif "remote" in install["servlet"]["meta"]:
+                remote = install["servlet"]["meta"]
+                tools = [remote]
+
             install = Servlet(
                 binding_id=binding["id"],
                 content_addr=binding["contentAddress"],
@@ -503,12 +508,21 @@ class Client:
                 has_oauth=install["servlet"]["has_client"],
             )
             for tool in tools:
-                install.tools[tool["name"]] = Tool(
-                    name=tool["name"],
-                    description=tool["description"],
-                    input_schema=tool["inputSchema"],
-                    servlet=install,
-                )
+                if "remote" in tool:
+                    install.tools[tool["url"]] = Tool(
+                        name=tool["url"],
+                        description=tool["description"],
+                        input_schema={},
+                        servlet=install,
+                        url=tool["url"],
+                    )
+                else:
+                    install.tools[tool["name"]] = Tool(
+                        name=tool["name"],
+                        description=tool["description"],
+                        input_schema=tool["inputSchema"],
+                        servlet=install,
+                    )
             self.install_cache[install.name] = install
             if install.name in self.plugin_cache:
                 del self.plugin_cache[install.name]

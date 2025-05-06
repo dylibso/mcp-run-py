@@ -104,6 +104,11 @@ class Tool:
     servlet: Optional[Servlet] = None
     """The servlet instance that provides this tool"""
 
+    url: str | None
+    """
+    Remote MCP URL
+    """
+
     def __str__(self) -> str:
         """Return a human-readable representation of the tool"""
         return f"{self.servlet.name}.{self.name}" if self.servlet else self.name
