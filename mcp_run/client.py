@@ -297,7 +297,7 @@ class Client:
             modified_at=datetime.fromisoformat(data["modified_at"]),
         )
         if set_current:
-            self.set_profile(name)
+            self.profile = name
         return p
 
     def list_user_profiles(self) -> Iterator[Profile]:
