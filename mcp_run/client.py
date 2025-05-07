@@ -1,14 +1,10 @@
 from dataclasses import dataclass
-from typing import Iterator, Dict, List, TypedDict, Any, TextIO
+from typing import Iterator, Dict, List, TypedDict
 from datetime import datetime, timedelta
-from mcp.client.sse import sse_client
-from mcp.client.stdio import stdio_client, StdioServerParameters as StdioClientConfig
-from mcp import ClientSession
+from .mcp_protocol import StdioClientConfig, SSEClientConfig, MCPClient
 import logging
 import traceback
 import json
-import os
-from contextlib import asynccontextmanager
 
 import requests
 
@@ -74,62 +70,6 @@ def _convert_type(t):
     elif t == "array":
         return list
     raise TypeError(f"Unhandled conversion type: {t}")
-
-
-@dataclass
-class SSEClientConfig:
-    url: str
-
-    headers: Dict[str, Any] | None = None
-
-    timeout: float = 5
-
-    sse_read_timeout: float = 60 * 5
-
-
-DEVNULL = open(os.devnull, "wb")
-
-
-@dataclass
-class MCPClient:
-    config: StdioClientConfig | SSEClientConfig
-    session: ClientSession | None = None
-    errlog: TextIO = DEVNULL
-
-    @property
-    def is_sse(self) -> bool:
-        return isinstance(self.config, SSEClientConfig)
-
-    @property
-    def is_stdio(self) -> bool:
-        return isinstance(self.config, StdioClientConfig)
-
-    @asynccontextmanager
-    async def connect(self):
-        self.errlog = self.errlog or open(os.devnull)
-        if isinstance(self.config, SSEClientConfig):
-            async with sse_client(
-                self.config.url,
-                headers=self.config.headers,
-                timeout=self.config.timeout,
-                sse_read_timeout=self.config.sse_read_timeout,
-            ) as (read, write):
-                try:
-                    async with ClientSession(read, write) as session:
-                        await session.initialize()
-                        self.session = session
-                        yield session
-                finally:
-                    self.session = None
-        elif isinstance(self.config, StdioClientConfig):
-            async with stdio_client(self.config, errlog=self.errlog) as (read, write):
-                try:
-                    async with ClientSession(read, write) as session:
-                        await session.initialize()
-                        self.session = session
-                        yield session
-                finally:
-                    self.session = None
 
 
 class Client:
