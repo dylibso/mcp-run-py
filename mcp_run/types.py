@@ -97,12 +97,25 @@ class Tool:
     input_schema: dict
     """
     JSON Schema defining the expected input parameters.
+    """
 
-    This schema validates the input dictionary passed to tool.call()
+    remote: dict | None = None
+    """
+    Information about a remote servlet
     """
 
     servlet: Optional[Servlet] = None
     """The servlet instance that provides this tool"""
+
+    @property
+    def is_remote(self) -> bool:
+        return self.remote is not None
+
+    @property
+    def remote_url(self) -> str | None:
+        if not self.is_remote:
+            return None
+        return self.remote.get("url")
 
     def __str__(self) -> str:
         """Return a human-readable representation of the tool"""
@@ -125,12 +138,12 @@ class Servlet:
     Servlet slug
     """
 
-    binding_id: str
+    binding_id: str | None
     """
     Servlet binding ID
     """
 
-    content_addr: str
+    content_addr: str | None
     """
     Content address for WASM module
     """

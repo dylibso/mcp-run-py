@@ -1,18 +1,22 @@
 from dataclasses import dataclass
-from typing import Iterator, Dict, List, TypedDict
+from typing import Iterator, Dict, List, TypedDict, Any, TextIO
 from datetime import datetime, timedelta
+from mcp.client.sse import sse_client
+from mcp.client.stdio import stdio_client, StdioServerParameters as StdioConfig
+from mcp import ClientSession
 import logging
 import traceback
 import json
+import os
+from contextlib import asynccontextmanager
 
 import requests
-import extism as ext
 
 from .api import Api
-from .types import Servlet, ServletSearchResult, CallResult, Tool, ProfileSlug
+from .types import Servlet, ServletSearchResult, Tool, ProfileSlug
 from .profile import Profile
 from .task import Task, TaskRun
-from .plugin import InstalledPlugin
+
 from .config import ClientConfig, _default_session_id
 
 
@@ -72,6 +76,62 @@ def _convert_type(t):
     raise TypeError(f"Unhandled conversion type: {t}")
 
 
+@dataclass
+class SSEConfig:
+    url: str
+
+    headers: Dict[str, Any] | None = None
+
+    timeout: float = 5
+
+    sse_read_timeout: float = 60 * 5
+
+
+DEVNULL = open(os.devnull, "wb")
+
+
+@dataclass
+class MCPClient:
+    config: StdioConfig | SSEConfig
+    session: ClientSession | None = None
+    errlog: TextIO = DEVNULL
+
+    @property
+    def is_sse(self) -> bool:
+        return isinstance(self.config, SSEConfig)
+
+    @property
+    def is_stdio(self) -> bool:
+        return isinstance(self.config, StdioConfig)
+
+    @asynccontextmanager
+    async def connect(self):
+        self.errlog = self.errlog or open(os.devnull)
+        if isinstance(self.config, SSEConfig):
+            async with sse_client(
+                self.config.url,
+                headers=self.config.headers,
+                timeout=self.config.timeout,
+                sse_read_timeout=self.config.sse_read_timeout,
+            ) as (read, write):
+                try:
+                    async with ClientSession(read, write) as session:
+                        await session.initialize()
+                        self.session = session
+                        yield session
+                finally:
+                    self.session = None
+        elif isinstance(self.config, StdioConfig):
+            async with stdio_client(self.config, errlog=self.errlog) as (read, write):
+                try:
+                    async with ClientSession(read, write) as session:
+                        await session.initialize()
+                        self.session = session
+                        yield session
+                finally:
+                    self.session = None
+
+
 class Client:
     """
     Main client for interacting with the mcp.run API.
@@ -90,7 +150,10 @@ class Client:
         for profile in client.list_profiles():
             print(f"{profile.slug}: {profile.description}")
 
-        # Install and use a tool
+        # Call a tool
+        # TODO
+        async with client.mcp_sse().connect() as session:
+            session.call_tool("tool-name", params
         results = client.call_tool("tool-name", params={"param": "value"})
         ```
 
@@ -121,19 +184,14 @@ class Client:
     mcp.run api endpoints
     """
 
-    install_cache: Dict[str, Servlet]
+    install_cache: Dict[str, Dict[str, Servlet]]
     """
-    Cache of Installs
-    """
-
-    plugin_cache: Dict[str, InstalledPlugin]
-    """
-    Cache of InstalledPlugins
+    Cached installed servlets
     """
 
     last_installations_request: Dict[str, str]
     """
-    Date header from last installations request
+    Last installation request cache
     """
 
     _user: User | None = None
@@ -152,12 +210,11 @@ class Client:
             config = ClientConfig(*args, **kw)
         self.session_id = session_id
         self.api = Api(config.base_url)
-        self.install_cache = {}
-        self.plugin_cache = {}
         self.logger = config.logger
         self.config = config
         self._user = None
         self.last_installations_request = {}
+        self.install_cache = {}
 
         if log_level is not None:
             self.configure_logging(level=log_level)
@@ -204,11 +261,6 @@ class Client:
         """
         return logging.basicConfig(*args, **kw)
 
-    def clear_cache(self):
-        self.last_installations_request = {}
-        self.install_cache = {}
-        self.plugin_cache = {}
-
     @property
     def user(self) -> User:
         """
@@ -239,7 +291,6 @@ class Client:
 
         if profile != self.config.profile:
             self.config.profile = profile
-            self.clear_cache()
 
     def create_task(
         self,
@@ -480,7 +531,7 @@ class Client:
         res.raise_for_status()
         if res.status_code == 301 or res.status_code == 304:
             self.logger.debug(f"No changes since {last}")
-            for v in self.install_cache.values():
+            for v in self.install_cache.get(profile, {}).values():
                 yield v
             return
         data = res.json()
@@ -488,33 +539,42 @@ class Client:
         self.last_installations_request[profile] = res.headers.get("Date")
         for install in data["installs"]:
             binding = install["binding"]
-            if "schema" not in install["servlet"]["meta"]:
-                # ignore remote servlets
-                continue
-            tools = install["servlet"]["meta"]["schema"]
-            if "tools" in tools:
-                tools = tools["tools"]
-            else:
-                tools = [tools]
+            if "schema" in install["servlet"]["meta"]:
+                tools = install["servlet"]["meta"]["schema"]
+                if "tools" in tools:
+                    tools = tools["tools"]
+                else:
+                    tools = [tools]
+            elif "remote" in install["servlet"]["meta"]:
+                tools = [install["servlet"]["meta"]]
             install = Servlet(
-                binding_id=binding["id"],
-                content_addr=binding["contentAddress"],
+                binding_id=binding.get("id"),
+                content_addr=binding.get("contentAddress"),
                 name=install.get("name", ""),
                 slug=ProfileSlug.parse(install["servlet"]["slug"]),
-                settings=install["settings"],
+                settings=install.get("settings", {}),
                 tools={},
                 has_oauth=install["servlet"]["has_client"],
             )
             for tool in tools:
-                install.tools[tool["name"]] = Tool(
-                    name=tool["name"],
-                    description=tool["description"],
-                    input_schema=tool["inputSchema"],
-                    servlet=install,
-                )
-            self.install_cache[install.name] = install
-            if install.name in self.plugin_cache:
-                del self.plugin_cache[install.name]
+                if "remote" in tool:
+                    install.tools[tool["remote"]["url"]] = Tool(
+                        name=tool["remote"]["url"],
+                        description=tool["description"],
+                        input_schema={},
+                        servlet=install,
+                        remote=tool["remote"],
+                    )
+                elif "inputSchema" in tool:
+                    install.tools[tool["name"]] = Tool(
+                        name=tool["name"],
+                        description=tool["description"],
+                        input_schema=tool["inputSchema"],
+                        servlet=install,
+                    )
+            if profile not in self.install_cache:
+                self.install_cache[profile] = {}
+            self.install_cache[profile][install.name] = install
             yield install
 
     @property
@@ -525,7 +585,7 @@ class Client:
         """
         for install in self.list_installs():
             continue
-        return self.install_cache
+        return self.install_cache.get(self.config.profile, {})
 
     def uninstall(self, servlet: Servlet | str, profile: Profile | None = None):
         """
@@ -544,8 +604,6 @@ class Client:
             },
         )
         res.raise_for_status()
-        if profile is None:
-            self.clear_cache()
 
     def install(
         self,
@@ -586,8 +644,6 @@ class Client:
             },
         )
         res.raise_for_status()
-        if profile is None:
-            self.clear_cache()
 
     @property
     def tools(self) -> Dict[str, Tool]:
@@ -633,138 +689,6 @@ class Client:
                 modified_at=datetime.fromisoformat(servlet["modified_at"]),
             )
 
-    def plugin(
-        self,
-        install: Servlet,
-        cache: bool = True,
-        wasi: bool | None = None,
-        functions: List[ext.Function] | None = None,
-        wasm: List[Dict[str, bytes]] | None = None,
-    ) -> InstalledPlugin:
-        """
-        Instantiate an installed servlet, turning it into an InstalledPlugin
-
-        Args:
-            install: The servlet to instantiate
-            wasi: Whether to enable WASI
-            functions: Optional list of Extism functions to include
-            wasm: Optional list of additional WASM modules
-
-        Returns:
-            An InstalledPlugin instance
-        """
-        if install.has_oauth:
-            res = requests.get(
-                self.api.oauth(self.config.profile, install.name),
-                cookies={
-                    "sessionId": self.session_id,
-                },
-            )
-            res.raise_for_status()
-            oauth = res.json()["oauth_info"]
-        else:
-            oauth = None
-        wasi = wasi or True
-        cache_ok = cache and wasi and functions is None and wasm is None
-        if cache_ok:
-            cached: InstalledPlugin | None = self.plugin_cache.get(install.name)
-            if cached is not None:
-                if (
-                    cached._timestamp + timedelta(minutes=4, seconds=30)
-                    > datetime.now()
-                ):
-                    self.logger.info(f"Found cached {install.name} instance")
-                    return cached
-                else:
-                    self.logger.info(
-                        f"Found cached {install.name}, but oauth token update is needed"
-                    )
-                    del self.plugin_cache[install.name]
-        if install.content is None:
-            self.logger.info(
-                f"Fetching servlet Wasm for {install.name}: {install.content_addr}"
-            )
-            res = requests.get(
-                self.api.content(install.content_addr),
-                cookies={
-                    "sessionId": self.session_id,
-                },
-            )
-            install.content = res.content
-        perm = install.settings["permissions"]
-        wasm_modules = [{"data": install.content}]
-        if wasm is not None:
-            wasm_modules.extend(wasm)
-        manifest = {
-            "wasm": wasm_modules,
-            "allowed_paths": perm["filesystem"].get("volumes", {}),
-            "allowed_hosts": perm["network"].get("domains", []),
-            "config": install.settings.get("config", {}),
-        }
-
-        if oauth is not None:
-            manifest["config"][oauth["config_name"]] = oauth["access_token"]
-
-        if functions is None:
-            functions = []
-        p = InstalledPlugin(
-            install, ext.Plugin(manifest, wasi=wasi, functions=functions)
-        )
-        if cache_ok:
-            self.plugin_cache[install.name] = p
-        return p
-
-    def call_tool(
-        self,
-        tool: str | Tool,
-        params: dict | None = None,
-        *,
-        wasi: bool = True,
-        functions: List[ext.Function] | None = None,
-        wasm: List[Dict[str, bytes]] | None = None,
-    ) -> CallResult:
-        """
-        Call a tool with the given input parameters.
-
-        This method handles looking up the tool, instantiating the necessary plugin,
-        and executing the tool call with the provided parameters.
-
-        Args:
-            tool: Name of the tool or Tool instance to call
-            params: Dictionary of input parameters matching the tool's schema
-            wasi: Whether to enable WASI support for the tool
-            functions: Optional list of additional Extism functions to include
-            wasm: Optional list of additional WASM modules to load
-
-        Returns:
-            CallResult containing the tool's output and metadata
-
-        Raises:
-            ValueError: If the tool is not found or input validation fails
-            RuntimeError: If the tool execution fails
-
-        Example:
-            ```python
-            # Call by name
-            result = client.call_tool("compress-image", {
-                "image": image_bytes,
-                "format": "jpeg",
-                "quality": 85
-            })
-
-            # Call using Tool instance
-            tool = client.get_tool("compress-image")
-            result = client.call_tool(tool, {...})
-            ```
-        """
-        if isinstance(tool, str):
-            found_tool = self.tool(tool)
-            if found_tool is None:
-                raise ValueError(f"Tool '{tool}' not found")
-            tool = found_tool
-        plugin = self.plugin(tool.servlet, wasi=wasi, functions=functions, wasm=wasm)
-        return plugin.call(tool=tool.name, input=params or {})
-
     def delete_profile(self, profile: str | Profile | ProfileSlug):
         """
         Delete a profile
@@ -778,3 +702,35 @@ class Client:
             },
         )
         res.raise_for_status()
+
+    def mcp_sse(
+        self,
+        profile: str | Profile | ProfileSlug | None = None,
+        version="v0",
+        expires_in: timedelta | None = None,
+    ) -> MCPClient:
+        """
+        Create mcpx SSE client
+        """
+        profile = self._fix_profile(profile or self.config.profile)
+        url = self.api.mcp_sse_url()
+        expires_in = expires_in or timedelta(weeks=52)
+        res = requests.post(
+            url,
+            json={
+                "version": version,
+                "activeProfile": profile,
+                "expiresIn": expires_in.total_seconds(),
+            },
+            cookies={
+                "sessionId": self.session_id,
+            },
+        )
+        res.raise_for_status()
+        return MCPClient(SSEConfig(url=res.text))
+
+    def mcp_stdio(self, config: StdioConfig | None = None) -> MCPClient:
+        """
+        Create mcpx stdio client
+        """
+        return MCPClient(StdioConfig(command="npx", args=["--yes", "@dylibso/mcpx"]))

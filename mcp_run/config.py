@@ -62,11 +62,6 @@ class ClientConfig:
     mcp.run base URL
     """
 
-    tool_refresh_time: timedelta = _default_update_interval()
-    """
-    Length of time to wait between checking for new tools
-    """
-
     logger: logging.Logger = logging.getLogger(__name__)
     """
     Python logger

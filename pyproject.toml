@@ -5,8 +5,7 @@ description = "A Python client for mcp.run"
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
-    "extism>=1.0.4",
-    "mcp>=1.6.0",
+    "mcp>=1.7.0",
     "requests>=2.32.3",
 ]
 
