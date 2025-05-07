@@ -1,9 +1,8 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Optional, Dict, List
+from typing import Optional, Dict
 from datetime import datetime
-import json
 
 
 class MCPRunError(Exception):
@@ -99,17 +98,14 @@ class Tool:
     JSON Schema defining the expected input parameters.
     """
 
-    remote: dict | None = None
-    """
-    Information about a remote servlet
-    """
-
     servlet: Optional[Servlet] = None
     """The servlet instance that provides this tool"""
 
     @property
     def is_remote(self) -> bool:
-        return self.remote is not None
+        if self.servlet is None:
+            return False
+        return self.servlet.remote is not None
 
     @property
     def remote_url(self) -> str | None:
@@ -165,6 +161,15 @@ class Servlet:
 
     has_oauth: bool = False
 
+    remote: dict | None = None
+    """
+    Remove servlet info
+    """
+
+    @property
+    def is_remote(self) -> bool:
+        return self.remote is not None
+
     def __eq__(self, other):
         if other is None:
             return False
@@ -176,6 +181,7 @@ class Servlet:
             and self.slug == other.slug
             and self.name == other.name
             and self.has_oauth == other.has_oauth
+            and self.remote == other.remote
         )
 
 

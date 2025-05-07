@@ -1,10 +1,12 @@
 from dataclasses import dataclass
-from typing import Iterator, Dict, List
+from typing import Iterator, Dict, List, Any
 from datetime import datetime, timedelta
 from .mcp_protocol import StdioClientConfig, SSEClientConfig, MCPClient
 import logging
+import json
 
 import requests
+import extism
 
 from .api import Api
 from .types import Servlet, ServletSearchResult, Tool, ProfileSlug
@@ -68,6 +70,40 @@ def _convert_type(t):
     elif t == "array":
         return list
     raise TypeError(f"Unhandled conversion type: {t}")
+
+
+class Plugin:
+    """
+    Wrapper around Extism plugin
+    """
+
+    _plugin: extism.Plugin
+    _servlet: Servlet
+    _tool: Tool | None = None
+
+    def __init__(
+        self, servlet: Servlet, plugin: extism.Plugin, tool: Tool | None = None
+    ):
+        self._plugin = plugin
+        self._servlet = servlet
+        self._tool = tool
+
+    def call(self, args: Dict[str, Any], tool: str | Tool | None = None) -> List[dict]:
+        if tool is None:
+            tool = self._tool
+
+        if isinstance(tool, Tool):
+            tool = tool.name
+
+        j = json.dumps(
+            {"params": {"arguments": args, "name": tool or self._servlet.name}}
+        )
+        res = self._plugin.call("call", data=j)
+        return json.loads(res).get("content", [])
+
+    def describe(self, args: Dict[str, Any]) -> dict:
+        res = self._plugin.call("describe", data=json.dumps(args))
+        return json.loads(res)
 
 
 class Client:
@@ -480,6 +516,7 @@ class Client:
                 settings=install.get("settings", {}),
                 tools={},
                 has_oauth=install["servlet"]["has_client"],
+                remote=install["servlet"]["meta"].get("remote"),
             )
             for tool in tools:
                 if "remote" in tool:
@@ -488,7 +525,6 @@ class Client:
                         description=tool["description"],
                         input_schema={},
                         servlet=install,
-                        remote=tool["remote"],
                     )
                 elif "inputSchema" in tool:
                     install.tools[tool["name"]] = Tool(
@@ -661,3 +697,48 @@ class Client:
         return MCPClient(
             StdioClientConfig(command="npx", args=["--yes", "@dylibso/mcpx"])
         )
+
+    def plugin(self, install: Servlet | Tool, **kw) -> Plugin:
+        if isinstance(install, Tool):
+            install = install.servlet
+        if install is None:
+            raise ValueError("No install found")
+        elif install.is_remote:
+            raise ValueError("Remote servlets can't be loaded as Plugins")
+        if install.has_oauth:
+            res = requests.get(
+                self.api.oauth(self.config.profile, install.name),
+                cookies={
+                    "sessionId": self.session_id,
+                },
+            )
+            res.raise_for_status()
+            oauth = res.json()["oauth_info"]
+        else:
+            oauth = None
+        if install.content is None:
+            self.logger.info(
+                f"Fetching servlet Wasm for {install.name}: {install.content_addr}"
+            )
+            res = requests.get(
+                self.api.content(install.content_addr),
+                cookies={
+                    "sessionId": self.session_id,
+                },
+            )
+            install.content = res.content
+
+        perm = install.settings["permissions"]
+        wasm = [{"data": install.content}]
+        manifest = {
+            "wasm": wasm,
+            "allowed_paths": perm["filesystem"].get("volumes", {}),
+            "allowed_hosts": perm["network"].get("domains", []),
+            "config": install.settings.get("config", {}),
+        }
+
+        if oauth is not None:
+            manifest["config"][oauth["config_name"]] = oauth["access_token"]
+        if "wasi" not in kw:
+            kw["wasi"] = True
+        return Plugin(install, extism.Plugin(manifest, **kw))
