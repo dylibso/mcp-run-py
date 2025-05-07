@@ -1,9 +1,10 @@
 from .types import Tool, Servlet, ServletSearchResult, ProfileSlug, MCPRunError
 from .task import Task, TaskRun, TaskRunError
 from .profile import Profile
-from .client import Client, MCPClient, SSEConfig, StdioConfig
+from .client import Client, MCPClient, SSEClientConfig, StdioClientConfig
 from .config import ClientConfig
 from .mcp_protocol import MCPServer
+
 
 __all__ = [
     "Tool",
@@ -20,6 +21,6 @@ __all__ = [
     "TaskRunError",
     "MCPRunError",
     "MCPClient",
-    "SSEConfig",
-    "StdioConfig",
+    "SSEClientConfig",
+    "StdioClientConfig",
 ]

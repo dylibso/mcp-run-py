@@ -2,7 +2,7 @@ from dataclasses import dataclass
 from typing import Iterator, Dict, List, TypedDict, Any, TextIO
 from datetime import datetime, timedelta
 from mcp.client.sse import sse_client
-from mcp.client.stdio import stdio_client, StdioServerParameters as StdioConfig
+from mcp.client.stdio import stdio_client, StdioServerParameters as StdioClientConfig
 from mcp import ClientSession
 import logging
 import traceback
@@ -77,7 +77,7 @@ def _convert_type(t):
 
 
 @dataclass
-class SSEConfig:
+class SSEClientConfig:
     url: str
 
     headers: Dict[str, Any] | None = None
@@ -92,22 +92,22 @@ DEVNULL = open(os.devnull, "wb")
 
 @dataclass
 class MCPClient:
-    config: StdioConfig | SSEConfig
+    config: StdioClientConfig | SSEClientConfig
     session: ClientSession | None = None
     errlog: TextIO = DEVNULL
 
     @property
     def is_sse(self) -> bool:
-        return isinstance(self.config, SSEConfig)
+        return isinstance(self.config, SSEClientConfig)
 
     @property
     def is_stdio(self) -> bool:
-        return isinstance(self.config, StdioConfig)
+        return isinstance(self.config, StdioClientConfig)
 
     @asynccontextmanager
     async def connect(self):
         self.errlog = self.errlog or open(os.devnull)
-        if isinstance(self.config, SSEConfig):
+        if isinstance(self.config, SSEClientConfig):
             async with sse_client(
                 self.config.url,
                 headers=self.config.headers,
@@ -121,7 +121,7 @@ class MCPClient:
                         yield session
                 finally:
                     self.session = None
-        elif isinstance(self.config, StdioConfig):
+        elif isinstance(self.config, StdioClientConfig):
             async with stdio_client(self.config, errlog=self.errlog) as (read, write):
                 try:
                     async with ClientSession(read, write) as session:
@@ -727,10 +727,12 @@ class Client:
             },
         )
         res.raise_for_status()
-        return MCPClient(SSEConfig(url=res.text))
+        return MCPClient(SSEClientConfig(url=res.text))
 
-    def mcp_stdio(self, config: StdioConfig | None = None) -> MCPClient:
+    def mcp_stdio(self, config: StdioClientConfig | None = None) -> MCPClient:
         """
         Create mcpx stdio client
         """
-        return MCPClient(StdioConfig(command="npx", args=["--yes", "@dylibso/mcpx"]))
+        return MCPClient(
+            StdioClientConfig(command="npx", args=["--yes", "@dylibso/mcpx"])
+        )
