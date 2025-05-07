@@ -6,6 +6,7 @@ from mcp.client.sse import sse_client
 from mcp.client.stdio import stdio_client, StdioServerParameters as StdioClientConfig
 from mcp import ClientSession
 import os
+import atexit
 from contextlib import asynccontextmanager
 
 
@@ -37,6 +38,7 @@ class SSEClientConfig:
 
 
 DEVNULL = open(os.devnull, "wb")
+atexit.register(lambda x: x.close(), DEVNULL)
 
 
 @dataclass
