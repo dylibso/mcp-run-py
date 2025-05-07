@@ -1,10 +1,8 @@
 from dataclasses import dataclass
-from typing import Iterator, Dict, List, TypedDict
+from typing import Iterator, Dict, List
 from datetime import datetime, timedelta
 from .mcp_protocol import StdioClientConfig, SSEClientConfig, MCPClient
 import logging
-import traceback
-import json
 
 import requests
 
@@ -174,27 +172,6 @@ class Client:
             return ProfileSlug.parse(profile)
         return ProfileSlug.parse(profile)
 
-    def _make_pydantic_function(self, tool: Tool):
-        props = tool.input_schema["properties"]
-        t = {k: _convert_type(v["type"]) for k, v in props.items()}
-        InputType = TypedDict("Input", t)
-
-        def f(input: InputType):
-            try:
-                res = self.call_tool(tool=tool.name, params=input)
-                out = ""
-                for t in res.content:
-                    if hasattr(t, "text"):
-                        out += t.text
-                    else:
-                        out += json.dumps(t)
-                    out += "\n"
-                return out
-            except Exception as exc:
-                return f"ERROR call to tool {tool.name} failed: {traceback.format_exception(exc)}"
-
-        return f
-
     def configure_logging(self, *args, **kw):
         """
         Configure logging using logging.basicConfig
@@ -223,7 +200,15 @@ class Client:
         )
         return self._user
 
-    def set_profile(self, profile: str | ProfileSlug | Profile):
+    @property
+    def profile(self):
+        """
+        Get the current profile
+        """
+        return self.config.profile
+
+    @profile.setter
+    def profile(self, profile: str | ProfileSlug | Profile):
         """
         Select a profile
         """
