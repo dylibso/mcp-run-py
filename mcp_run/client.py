@@ -690,14 +690,6 @@ class Client:
         res.raise_for_status()
         return MCPClient(SSEClientConfig(url=res.text))
 
-    def mcp_stdio(self, config: StdioClientConfig | None = None) -> MCPClient:
-        """
-        Create mcpx stdio client
-        """
-        return MCPClient(
-            StdioClientConfig(command="npx", args=["--yes", "@dylibso/mcpx"])
-        )
-
     def plugin(self, install: Servlet | Tool, **kw) -> Plugin:
         if isinstance(install, Tool):
             install = install.servlet
@@ -742,3 +734,10 @@ class Client:
         if "wasi" not in kw:
             kw["wasi"] = True
         return Plugin(install, extism.Plugin(manifest, **kw))
+
+
+def mcpx_stdio(config: StdioClientConfig | None = None) -> MCPClient:
+    """
+    Create mcpx stdio client
+    """
+    return MCPClient(StdioClientConfig(command="npx", args=["--yes", "@dylibso/mcpx"]))
