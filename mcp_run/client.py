@@ -502,7 +502,9 @@ class Client:
             binding = install["binding"]
             if "schema" in install["servlet"]["meta"]:
                 tools = install["servlet"]["meta"]["schema"]
-                if "tools" in tools:
+                if tools is None:
+                    tools = []
+                elif "tools" in tools:
                     tools = tools["tools"]
                 else:
                     tools = [tools]
