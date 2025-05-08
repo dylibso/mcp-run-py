@@ -1,14 +1,19 @@
 import util  # noqa: F401
 from mcp_run import Client  # Import the mcp.run client
 
-client = Client()  # Create the client, this will check the
-# default location for the mcp.run config or
-# the `MCP_RUN_SESSION_ID` env var can be used
-# to specify a valid mcp.run session id
+import asyncio
 
-# Call a tool with the given input
-results = client.call_tool("eval-js", params={"code": "'Hello, world!'"})
 
-# Iterate over the results
-for content in results.content:
-    print(content.text)
+async def run():
+    client = Client()
+
+    tool = client.tools["eval-js"]
+
+    plugin = client.plugin(tool)
+    results = plugin.call({"code": "'Hello, world!'"})
+
+    for content in results:
+        print(content["text"])
+
+
+asyncio.run(run())

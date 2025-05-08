@@ -1,31 +1,87 @@
-from typing import Any
+from typing import Any, Dict, TextIO
+from dataclasses import dataclass
+from datetime import timedelta
 
-from mcp.server.fastmcp import FastMCP
-from mcp.server.fastmcp.tools import Tool
+from mcp.client.sse import sse_client
+from mcp.client.stdio import stdio_client, StdioServerParameters as StdioClientConfig
+from mcp import ClientSession
+import os
+import atexit
+from contextlib import asynccontextmanager
 
-from .client import Client
+
+@dataclass
+class SSEClientConfig:
+    """
+    Configuration for MCP SSE clients
+    """
+
+    url: str
+    """
+    SSE URL
+    """
+
+    headers: Dict[str, Any] | None = None
+    """
+    HTTP request headers for SSE client
+    """
+
+    timeout: timedelta | None = None
+    """
+    Connection timeout
+    """
+
+    sse_read_timeout: timedelta | None = None
+    """
+    Read timeout
+    """
 
 
-class MCPServer(FastMCP):
-    client: Client
+DEVNULL = open(os.devnull, "wb")
+atexit.register(lambda x: x.close(), DEVNULL)
 
-    def __init__(self, client: Client | None = None, **kw):
-        self.client = client or Client()
-        super().__init__(**kw)
-        self.update_tools()
 
-    async def list_tools(self) -> list:
-        self.update_tools()
-        return await super().list_tools()
+@dataclass
+class MCPClient:
+    config: StdioClientConfig | SSEClientConfig
+    session: ClientSession | None = None
+    errlog: TextIO = DEVNULL
 
-    async def call_tool(self, name: str, arguments: dict[str, Any]):
-        return await super().call_tool(name, arguments)
+    @property
+    def is_sse(self) -> bool:
+        return isinstance(self.config, SSEClientConfig)
 
-    def update_tools(self):
-        for t in self.client.tools.values():
-            fn = self.client._make_pydantic_function(t)
-            self._tool_manager._tools[t.name] = Tool.from_function(
-                fn=fn,
-                name=t.name,
-                description=t.description,
+    @property
+    def is_stdio(self) -> bool:
+        return isinstance(self.config, StdioClientConfig)
+
+    @asynccontextmanager
+    async def connect(self):
+        self.errlog = self.errlog or open(os.devnull)
+        if self.is_sse:
+            async with sse_client(
+                self.config.url,
+                headers=self.config.headers,
+                timeout=self.config.timeout,
+                sse_read_timeout=self.config.sse_read_timeout,
+            ) as (read, write):
+                try:
+                    async with ClientSession(read, write) as session:
+                        await session.initialize()
+                        self.session = session
+                        yield session
+                finally:
+                    self.session = None
+        elif self.is_stdio:
+            async with stdio_client(self.config, errlog=self.errlog) as (read, write):
+                try:
+                    async with ClientSession(read, write) as session:
+                        await session.initialize()
+                        self.session = session
+                        yield session
+                finally:
+                    self.session = None
+        else:
+            raise ValueError(
+                f"Expected either SSEClientConfig or StdioClientConfig but got {type(self.config)}"
             )

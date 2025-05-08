@@ -1,9 +1,8 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Optional, Dict, List
+from typing import Optional, Dict
 from datetime import datetime
-import json
 
 
 class MCPRunError(Exception):
@@ -97,12 +96,22 @@ class Tool:
     input_schema: dict
     """
     JSON Schema defining the expected input parameters.
-
-    This schema validates the input dictionary passed to tool.call()
     """
 
     servlet: Optional[Servlet] = None
     """The servlet instance that provides this tool"""
+
+    @property
+    def is_remote(self) -> bool:
+        if self.servlet is None:
+            return False
+        return self.servlet.remote is not None
+
+    @property
+    def remote_url(self) -> str | None:
+        if not self.is_remote:
+            return None
+        return self.remote.get("url")
 
     def __str__(self) -> str:
         """Return a human-readable representation of the tool"""
@@ -125,12 +134,12 @@ class Servlet:
     Servlet slug
     """
 
-    binding_id: str
+    binding_id: str | None
     """
     Servlet binding ID
     """
 
-    content_addr: str
+    content_addr: str | None
     """
     Content address for WASM module
     """
@@ -152,6 +161,15 @@ class Servlet:
 
     has_oauth: bool = False
 
+    remote: dict | None = None
+    """
+    Remove servlet info
+    """
+
+    @property
+    def is_remote(self) -> bool:
+        return self.remote is not None
+
     def __eq__(self, other):
         if other is None:
             return False
@@ -163,6 +181,7 @@ class Servlet:
             and self.slug == other.slug
             and self.name == other.name
             and self.has_oauth == other.has_oauth
+            and self.remote == other.remote
         )
 
 
@@ -200,59 +219,4 @@ class ServletSearchResult:
     modified_at: datetime
     """
     Modification timestamp
-    """
-
-
-@dataclass
-class Content:
-    """
-    The result of tool calls
-    """
-
-    type: str
-    """
-    The type of content, for example "text" or "image"
-    """
-
-    mime_type: str = "text/plain"
-    """
-    Content mime type
-    """
-
-    _data: bytes | None = None
-    """
-    Result message or data
-    """
-
-    @property
-    def text(self):
-        """
-        Get the result message
-        """
-        return self.data.decode()
-
-    @property
-    def json(self):
-        """
-        Get the result data as json
-        """
-        return json.loads(self.text)
-
-    @property
-    def data(self):
-        """
-        Get the result as bytes
-        """
-        return self._data or b""
-
-
-@dataclass
-class CallResult:
-    """
-    Result of a tool call
-    """
-
-    content: List[Content]
-    """
-    Content returned from a call
     """

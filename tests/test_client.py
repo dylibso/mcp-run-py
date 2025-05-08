@@ -1,7 +1,8 @@
-from mcp_run import Client, ClientConfig, ProfileSlug
+from mcp_run import Client, ProfileSlug
 
 import unittest
-import os
+import asyncio
+import json
 
 
 class TestProfileSlug(unittest.TestCase):
@@ -48,21 +49,34 @@ class TestClient(unittest.TestCase):
             self.assertEqual(profile.slug.user, client.user.username)
 
     def test_call(self):
-        client = self.client()
-        # print(list(client.tools.keys()))
-        results = client.call_tool("eval-js", params={"code": "'Hello, world!'"})
-        for content in results.content:
-            self.assertEqual(content.text, "Hello, world!")
-        results = client.call_tool("eval-js", params={"code": "'Hello, world!'"})
-        for content in results.content:
-            self.assertEqual(content.text, "Hello, world!")
-        results = client.call_tool("gh-get-repo-contributors", params={"owner": "dylibso", "repo": "mcp-run-py"})
-        for content in results.content:
-            self.assertGreaterEqual(len(content.json), 1)
-        results = client.call_tool("gh-get-repo-contributors", params={"owner": "dylibso", "repo": "mcp-run-py"})
-        for content in results.content:
-            self.assertGreaterEqual(len(content.json), 1)
+        async def run():
+            client = self.client()
 
+            async with client.mcp_sse().connect() as session:
+                results = await session.call_tool(
+                    "eval-js_eval-js", {"code": "'Hello, world!'"}
+                )
+                for content in results.content:
+                    self.assertEqual(content.text, "Hello, world!")
+                results = await session.call_tool(
+                    "eval-js_eval-js", {"code": "'Hello, world!'"}
+                )
+                for content in results.content:
+                    self.assertEqual(content.text, "Hello, world!")
+                results = await session.call_tool(
+                    "github_gh-get-repo-contributors",
+                    {"owner": "dylibso", "repo": "mcp-run-py"},
+                )
+                for content in results.content:
+                    self.assertGreaterEqual(len(json.loads(content.text)), 1)
+                results = await session.call_tool(
+                    "github_gh-get-repo-contributors",
+                    {"owner": "dylibso", "repo": "mcp-run-py"},
+                )
+                for content in results.content:
+                    self.assertGreaterEqual(len(json.loads(content.text)), 1)
+
+        asyncio.run(run())
 
     def test_profile_install_uninstall(self):
         client = self.client()
@@ -97,8 +111,7 @@ class TestClient(unittest.TestCase):
         task_run = my_task.run({"name": "Bob"})
         self.assertIn("Bob", task_run.results())
 
-        
-    def test_tasks(self):
+    def test_tasks2(self):
         client = self.client()
 
         for task in client.tasks:

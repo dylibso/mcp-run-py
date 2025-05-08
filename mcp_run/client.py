@@ -1,18 +1,18 @@
 from dataclasses import dataclass
-from typing import Iterator, Dict, List, TypedDict
+from typing import Iterator, Dict, List, Any
 from datetime import datetime, timedelta
+from .mcp_protocol import StdioClientConfig, SSEClientConfig, MCPClient
 import logging
-import traceback
 import json
 
 import requests
-import extism as ext
+import extism
 
 from .api import Api
-from .types import Servlet, ServletSearchResult, CallResult, Tool, ProfileSlug
+from .types import Servlet, ServletSearchResult, Tool, ProfileSlug
 from .profile import Profile
 from .task import Task, TaskRun
-from .plugin import InstalledPlugin
+
 from .config import ClientConfig, _default_session_id
 
 
@@ -72,6 +72,40 @@ def _convert_type(t):
     raise TypeError(f"Unhandled conversion type: {t}")
 
 
+class Plugin:
+    """
+    Wrapper around Extism plugin
+    """
+
+    _plugin: extism.Plugin
+    _servlet: Servlet
+    _tool: Tool | None = None
+
+    def __init__(
+        self, servlet: Servlet, plugin: extism.Plugin, tool: Tool | None = None
+    ):
+        self._plugin = plugin
+        self._servlet = servlet
+        self._tool = tool
+
+    def call(self, args: Dict[str, Any], tool: str | Tool | None = None) -> List[dict]:
+        if tool is None:
+            tool = self._tool
+
+        if isinstance(tool, Tool):
+            tool = tool.name
+
+        j = json.dumps(
+            {"params": {"arguments": args, "name": tool or self._servlet.name}}
+        )
+        res = self._plugin.call("call", data=j)
+        return json.loads(res).get("content", [])
+
+    def describe(self, args: Dict[str, Any]) -> dict:
+        res = self._plugin.call("describe", data=json.dumps(args))
+        return json.loads(res)
+
+
 class Client:
     """
     Main client for interacting with the mcp.run API.
@@ -90,7 +124,10 @@ class Client:
         for profile in client.list_profiles():
             print(f"{profile.slug}: {profile.description}")
 
-        # Install and use a tool
+        # Call a tool
+        # TODO
+        async with client.mcp_sse().connect() as session:
+            session.call_tool("tool-name", params
         results = client.call_tool("tool-name", params={"param": "value"})
         ```
 
@@ -121,19 +158,14 @@ class Client:
     mcp.run api endpoints
     """
 
-    install_cache: Dict[str, Servlet]
+    install_cache: Dict[str, Dict[str, Servlet]]
     """
-    Cache of Installs
-    """
-
-    plugin_cache: Dict[str, InstalledPlugin]
-    """
-    Cache of InstalledPlugins
+    Cached installed servlets
     """
 
     last_installations_request: Dict[str, str]
     """
-    Date header from last installations request
+    Last installation request cache
     """
 
     _user: User | None = None
@@ -152,12 +184,11 @@ class Client:
             config = ClientConfig(*args, **kw)
         self.session_id = session_id
         self.api = Api(config.base_url)
-        self.install_cache = {}
-        self.plugin_cache = {}
         self.logger = config.logger
         self.config = config
         self._user = None
         self.last_installations_request = {}
+        self.install_cache = {}
 
         if log_level is not None:
             self.configure_logging(level=log_level)
@@ -177,37 +208,11 @@ class Client:
             return ProfileSlug.parse(profile)
         return ProfileSlug.parse(profile)
 
-    def _make_pydantic_function(self, tool: Tool):
-        props = tool.input_schema["properties"]
-        t = {k: _convert_type(v["type"]) for k, v in props.items()}
-        InputType = TypedDict("Input", t)
-
-        def f(input: InputType):
-            try:
-                res = self.call_tool(tool=tool.name, params=input)
-                out = ""
-                for t in res.content:
-                    if hasattr(t, "text"):
-                        out += t.text
-                    else:
-                        out += json.dumps(t)
-                    out += "\n"
-                return out
-            except Exception as exc:
-                return f"ERROR call to tool {tool.name} failed: {traceback.format_exception(exc)}"
-
-        return f
-
     def configure_logging(self, *args, **kw):
         """
         Configure logging using logging.basicConfig
         """
         return logging.basicConfig(*args, **kw)
-
-    def clear_cache(self):
-        self.last_installations_request = {}
-        self.install_cache = {}
-        self.plugin_cache = {}
 
     @property
     def user(self) -> User:
@@ -231,7 +236,15 @@ class Client:
         )
         return self._user
 
-    def set_profile(self, profile: str | ProfileSlug | Profile):
+    @property
+    def profile(self):
+        """
+        Get the current profile
+        """
+        return self.config.profile
+
+    @profile.setter
+    def profile(self, profile: str | ProfileSlug | Profile):
         """
         Select a profile
         """
@@ -239,7 +252,6 @@ class Client:
 
         if profile != self.config.profile:
             self.config.profile = profile
-            self.clear_cache()
 
     def create_task(
         self,
@@ -321,7 +333,7 @@ class Client:
             modified_at=datetime.fromisoformat(data["modified_at"]),
         )
         if set_current:
-            self.set_profile(name)
+            self.profile = name
         return p
 
     def list_user_profiles(self) -> Iterator[Profile]:
@@ -480,7 +492,7 @@ class Client:
         res.raise_for_status()
         if res.status_code == 301 or res.status_code == 304:
             self.logger.debug(f"No changes since {last}")
-            for v in self.install_cache.values():
+            for v in self.install_cache.get(profile, {}).values():
                 yield v
             return
         data = res.json()
@@ -488,33 +500,44 @@ class Client:
         self.last_installations_request[profile] = res.headers.get("Date")
         for install in data["installs"]:
             binding = install["binding"]
-            if "schema" not in install["servlet"]["meta"]:
-                # ignore remote servlets
-                continue
-            tools = install["servlet"]["meta"]["schema"]
-            if "tools" in tools:
-                tools = tools["tools"]
-            else:
-                tools = [tools]
+            if "schema" in install["servlet"]["meta"]:
+                tools = install["servlet"]["meta"]["schema"]
+                if tools is None:
+                    tools = []
+                elif "tools" in tools:
+                    tools = tools["tools"]
+                else:
+                    tools = [tools]
+            elif "remote" in install["servlet"]["meta"]:
+                tools = [install["servlet"]["meta"]]
             install = Servlet(
-                binding_id=binding["id"],
-                content_addr=binding["contentAddress"],
+                binding_id=binding.get("id"),
+                content_addr=binding.get("contentAddress"),
                 name=install.get("name", ""),
                 slug=ProfileSlug.parse(install["servlet"]["slug"]),
-                settings=install["settings"],
+                settings=install.get("settings", {}),
                 tools={},
                 has_oauth=install["servlet"]["has_client"],
+                remote=install["servlet"]["meta"].get("remote"),
             )
             for tool in tools:
-                install.tools[tool["name"]] = Tool(
-                    name=tool["name"],
-                    description=tool["description"],
-                    input_schema=tool["inputSchema"],
-                    servlet=install,
-                )
-            self.install_cache[install.name] = install
-            if install.name in self.plugin_cache:
-                del self.plugin_cache[install.name]
+                if "remote" in tool:
+                    install.tools[tool["remote"]["url"]] = Tool(
+                        name=tool["remote"]["url"],
+                        description=tool["description"],
+                        input_schema={},
+                        servlet=install,
+                    )
+                elif "inputSchema" in tool:
+                    install.tools[tool["name"]] = Tool(
+                        name=tool["name"],
+                        description=tool["description"],
+                        input_schema=tool["inputSchema"],
+                        servlet=install,
+                    )
+            if profile not in self.install_cache:
+                self.install_cache[profile] = {}
+            self.install_cache[profile][install.name] = install
             yield install
 
     @property
@@ -525,7 +548,7 @@ class Client:
         """
         for install in self.list_installs():
             continue
-        return self.install_cache
+        return self.install_cache.get(self.config.profile, {})
 
     def uninstall(self, servlet: Servlet | str, profile: Profile | None = None):
         """
@@ -544,8 +567,6 @@ class Client:
             },
         )
         res.raise_for_status()
-        if profile is None:
-            self.clear_cache()
 
     def install(
         self,
@@ -586,8 +607,6 @@ class Client:
             },
         )
         res.raise_for_status()
-        if profile is None:
-            self.clear_cache()
 
     @property
     def tools(self) -> Dict[str, Tool]:
@@ -633,138 +652,6 @@ class Client:
                 modified_at=datetime.fromisoformat(servlet["modified_at"]),
             )
 
-    def plugin(
-        self,
-        install: Servlet,
-        cache: bool = True,
-        wasi: bool | None = None,
-        functions: List[ext.Function] | None = None,
-        wasm: List[Dict[str, bytes]] | None = None,
-    ) -> InstalledPlugin:
-        """
-        Instantiate an installed servlet, turning it into an InstalledPlugin
-
-        Args:
-            install: The servlet to instantiate
-            wasi: Whether to enable WASI
-            functions: Optional list of Extism functions to include
-            wasm: Optional list of additional WASM modules
-
-        Returns:
-            An InstalledPlugin instance
-        """
-        if install.has_oauth:
-            res = requests.get(
-                self.api.oauth(self.config.profile, install.name),
-                cookies={
-                    "sessionId": self.session_id,
-                },
-            )
-            res.raise_for_status()
-            oauth = res.json()["oauth_info"]
-        else:
-            oauth = None
-        wasi = wasi or True
-        cache_ok = cache and wasi and functions is None and wasm is None
-        if cache_ok:
-            cached: InstalledPlugin | None = self.plugin_cache.get(install.name)
-            if cached is not None:
-                if (
-                    cached._timestamp + timedelta(minutes=4, seconds=30)
-                    > datetime.now()
-                ):
-                    self.logger.info(f"Found cached {install.name} instance")
-                    return cached
-                else:
-                    self.logger.info(
-                        f"Found cached {install.name}, but oauth token update is needed"
-                    )
-                    del self.plugin_cache[install.name]
-        if install.content is None:
-            self.logger.info(
-                f"Fetching servlet Wasm for {install.name}: {install.content_addr}"
-            )
-            res = requests.get(
-                self.api.content(install.content_addr),
-                cookies={
-                    "sessionId": self.session_id,
-                },
-            )
-            install.content = res.content
-        perm = install.settings["permissions"]
-        wasm_modules = [{"data": install.content}]
-        if wasm is not None:
-            wasm_modules.extend(wasm)
-        manifest = {
-            "wasm": wasm_modules,
-            "allowed_paths": perm["filesystem"].get("volumes", {}),
-            "allowed_hosts": perm["network"].get("domains", []),
-            "config": install.settings.get("config", {}),
-        }
-
-        if oauth is not None:
-            manifest["config"][oauth["config_name"]] = oauth["access_token"]
-
-        if functions is None:
-            functions = []
-        p = InstalledPlugin(
-            install, ext.Plugin(manifest, wasi=wasi, functions=functions)
-        )
-        if cache_ok:
-            self.plugin_cache[install.name] = p
-        return p
-
-    def call_tool(
-        self,
-        tool: str | Tool,
-        params: dict | None = None,
-        *,
-        wasi: bool = True,
-        functions: List[ext.Function] | None = None,
-        wasm: List[Dict[str, bytes]] | None = None,
-    ) -> CallResult:
-        """
-        Call a tool with the given input parameters.
-
-        This method handles looking up the tool, instantiating the necessary plugin,
-        and executing the tool call with the provided parameters.
-
-        Args:
-            tool: Name of the tool or Tool instance to call
-            params: Dictionary of input parameters matching the tool's schema
-            wasi: Whether to enable WASI support for the tool
-            functions: Optional list of additional Extism functions to include
-            wasm: Optional list of additional WASM modules to load
-
-        Returns:
-            CallResult containing the tool's output and metadata
-
-        Raises:
-            ValueError: If the tool is not found or input validation fails
-            RuntimeError: If the tool execution fails
-
-        Example:
-            ```python
-            # Call by name
-            result = client.call_tool("compress-image", {
-                "image": image_bytes,
-                "format": "jpeg",
-                "quality": 85
-            })
-
-            # Call using Tool instance
-            tool = client.get_tool("compress-image")
-            result = client.call_tool(tool, {...})
-            ```
-        """
-        if isinstance(tool, str):
-            found_tool = self.tool(tool)
-            if found_tool is None:
-                raise ValueError(f"Tool '{tool}' not found")
-            tool = found_tool
-        plugin = self.plugin(tool.servlet, wasi=wasi, functions=functions, wasm=wasm)
-        return plugin.call(tool=tool.name, input=params or {})
-
     def delete_profile(self, profile: str | Profile | ProfileSlug):
         """
         Delete a profile
@@ -778,3 +665,81 @@ class Client:
             },
         )
         res.raise_for_status()
+
+    def mcp_sse(
+        self,
+        profile: str | Profile | ProfileSlug | None = None,
+        version="v0",
+        expires_in: timedelta | None = None,
+    ) -> MCPClient:
+        """
+        Create mcpx SSE client
+        """
+        profile = self._fix_profile(profile or self.config.profile)
+        url = self.api.mcp_sse_url()
+        expires_in = expires_in or timedelta(weeks=52)
+        res = requests.post(
+            url,
+            json={
+                "version": version,
+                "activeProfile": profile,
+                "expiresIn": expires_in.total_seconds(),
+            },
+            cookies={
+                "sessionId": self.session_id,
+            },
+        )
+        res.raise_for_status()
+        return MCPClient(SSEClientConfig(url=res.text))
+
+    def plugin(self, install: Servlet | Tool, **kw) -> Plugin:
+        if isinstance(install, Tool):
+            install = install.servlet
+        if install is None:
+            raise ValueError("No install found")
+        elif install.is_remote:
+            raise ValueError("Remote servlets can't be loaded as Plugins")
+        if install.has_oauth:
+            res = requests.get(
+                self.api.oauth(self.config.profile, install.name),
+                cookies={
+                    "sessionId": self.session_id,
+                },
+            )
+            res.raise_for_status()
+            oauth = res.json()["oauth_info"]
+        else:
+            oauth = None
+        if install.content is None:
+            self.logger.info(
+                f"Fetching servlet Wasm for {install.name}: {install.content_addr}"
+            )
+            res = requests.get(
+                self.api.content(install.content_addr),
+                cookies={
+                    "sessionId": self.session_id,
+                },
+            )
+            install.content = res.content
+
+        perm = install.settings["permissions"]
+        wasm = [{"data": install.content}]
+        manifest = {
+            "wasm": wasm,
+            "allowed_paths": perm["filesystem"].get("volumes", {}),
+            "allowed_hosts": perm["network"].get("domains", []),
+            "config": install.settings.get("config", {}),
+        }
+
+        if oauth is not None:
+            manifest["config"][oauth["config_name"]] = oauth["access_token"]
+        if "wasi" not in kw:
+            kw["wasi"] = True
+        return Plugin(install, extism.Plugin(manifest, **kw))
+
+
+def mcpx_stdio(config: StdioClientConfig | None = None) -> MCPClient:
+    """
+    Create mcpx stdio client
+    """
+    return MCPClient(StdioClientConfig(command="npx", args=["--yes", "@dylibso/mcpx"]))

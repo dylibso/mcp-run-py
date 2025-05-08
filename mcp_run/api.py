@@ -112,3 +112,9 @@ class Api:
         Get the data associated with a content address
         """
         return f"{self.base}/api/c/{addr}"
+
+    def mcp_sse_url(self):
+        """
+        Get a new mcp sse url
+        """
+        return f"{self.base}/api/mcp/sse/url"
