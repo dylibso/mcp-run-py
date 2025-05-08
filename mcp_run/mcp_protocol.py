@@ -58,7 +58,7 @@ class MCPClient:
     @asynccontextmanager
     async def connect(self):
         self.errlog = self.errlog or open(os.devnull)
-        if isinstance(self.config, SSEClientConfig):
+        if self.is_sse:
             async with sse_client(
                 self.config.url,
                 headers=self.config.headers,
@@ -72,7 +72,7 @@ class MCPClient:
                         yield session
                 finally:
                     self.session = None
-        elif isinstance(self.config, StdioClientConfig):
+        elif self.is_stdio:
             async with stdio_client(self.config, errlog=self.errlog) as (read, write):
                 try:
                     async with ClientSession(read, write) as session:
@@ -81,3 +81,7 @@ class MCPClient:
                         yield session
                 finally:
                     self.session = None
+        else:
+            raise ValueError(
+                f"Expected either SSEClientConfig or StdioClientConfig but got {type(self.config)}"
+            )
